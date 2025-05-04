@@ -1,0 +1,75 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Run App (main.py)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.main",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run DB Connector",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.database.db_connector",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run Auth Utils",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.utils.auth_utils",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run Auth DAO",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.database.auth_dao", // Configuration for Auth DAO
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run Item DAO",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.database.item_dao", // Configuration for Item DAO
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run Claim DAO",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.database.claim_dao", // Configuration for Claim DAO
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run Notification DAO",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.database.notification_dao", // Configuration for Notification DAO
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run ImageKit Service",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.firebase.imagekit_service", // Configuration for ImageKit Service (assuming firebase folder name)
+            "console": "integratedTerminal"
+        },
+         {
+            "name": "Run OTP Utils",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.utils.otp_utils", // Configuration for OTP Utils
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Run Email Utils",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.utils.email_utils", // Configuration for Email Utils (even if simulated)
+            "console": "integratedTerminal"
+        }
+    ]
+}
