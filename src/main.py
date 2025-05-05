@@ -16,7 +16,13 @@ from src.gui.register_frame import RegisterFrame
 from src.gui.otp_frame import OTPFrame
 from src.gui.main_app_frame import MainAppFrame
 from src.gui.forgot_password_frame import ForgotPasswordFrame
-from src.gui.reset_password_frame import ResetPasswordFrame # Impor ResetPasswordFrame yang baru
+from src.gui.reset_password_frame import ResetPasswordFrame
+from src.gui.report_item_frame import ReportItemFrame
+from src.gui.view_items_frame import ViewItemsFrame
+from src.gui.claim_item_frame import ClaimItemFrame
+from src.gui.my_claims_frame import MyClaimsFrame
+from src.gui.admin_panel_frame import AdminPanelFrame # Impor AdminPanelFrame yang baru
+
 
 # Mengakses konfigurasi lain dari .env jika diperlukan
 # Misalnya, durasi kedaluwarsa OTP dari .env
@@ -40,6 +46,9 @@ class MainApp:
         self.root.geometry("800x600") # Ukuran jendela default (lebar x tinggi) - Disesuaikan
         self.root.resizable(True, True) # Aktifkan resize jendela (opsional, disarankan untuk main frame)
 
+        # --- Atribut untuk menyimpan data pengguna yang sedang login ---
+        self.user_data = None # Akan menyimpan dictionary data pengguna setelah login berhasil
+
 
         # Menyimpan durasi kedaluwarsa OTP agar bisa diakses oleh frame lain jika diperlukan
         self.otp_expiry_minutes = OTP_EXPIRY_MINUTES
@@ -52,7 +61,13 @@ class MainApp:
         self.otp_frame = OTPFrame(self.root, self)
         self.main_app_frame = MainAppFrame(self.root, self)
         self.forgot_password_frame = ForgotPasswordFrame(self.root, self)
-        self.reset_password_frame = ResetPasswordFrame(self.root, self) # Buat instance ResetPasswordFrame
+        self.reset_password_frame = ResetPasswordFrame(self.root, self)
+        self.report_item_frame = ReportItemFrame(self.root, self)
+        self.view_items_frame = ViewItemsFrame(self.root, self)
+        self.claim_item_frame = ClaimItemFrame(self.root, self)
+        self.my_claims_frame = MyClaimsFrame(self.root, self)
+        self.admin_panel_frame = AdminPanelFrame(self.root, self) # Buat instance AdminPanelFrame yang baru
+        # Buat instance frame lain di sini (misal: AdminFrame, etc.)
 
 
         # Tampilkan frame pertama saat aplikasi dimulai (Login)
@@ -84,8 +99,21 @@ class MainApp:
             self.forgot_password_frame.hide()
         except AttributeError: pass
         try:
-            self.reset_password_frame.hide() # Sembunyikan ResetPasswordFrame
+            self.reset_password_frame.hide()
         except AttributeError: pass
+        try:
+            self.report_item_frame.hide()
+        except AttributeError: pass
+        try:
+            self.view_items_frame.hide()
+        except AttributeError: pass
+        try:
+            self.claim_item_frame.hide()
+        except AttributeError: pass
+        try: # Tambahkan AdminPanelFrame ke daftar yang disembunyikan
+            self.admin_panel_frame.hide()
+        except AttributeError: pass
+        # Sembunyikan frame lain di sini
 
 
         # Tampilkan frame yang diminta
@@ -93,6 +121,8 @@ class MainApp:
 
     def show_login_frame(self):
         """Menampilkan frame Login."""
+        # Reset user_data saat kembali ke login
+        self.user_data = None
         self.show_frame(self.login_frame)
         # Set fokus ke entry field pertama di frame login untuk kemudahan pengguna
         self.login_frame.entry_username.focus_set()
@@ -103,14 +133,15 @@ class MainApp:
         # Set fokus ke entry field pertama di frame register
         self.register_frame.entry_full_name.focus_set()
 
-    def show_otp_verification_frame(self, user_id):
+    def show_otp_verification_frame(self, user_id): # Menerima UserID, BUKAN tuple
         """
         Menampilkan frame Verifikasi OTP dan mengatur UserID pengguna
         yang baru mendaftar untuk diverifikasi.
 
         Args:
-            user_id (int): UserID dari pengguna yang baru mendaftar (didapat dari DAO).
+            user_id (int): UserID dari pengguna yang baru mendaftar.
         """
+        print(f"MainApp: show_otp_verification_frame called for UserID: {user_id}") # Debugging print
         # Mengatur UserID di frame OTP agar frame tersebut tahu pengguna mana yang perlu diverifikasi
         self.otp_frame.set_user_to_verify(user_id)
         self.show_frame(self.otp_frame)
@@ -127,23 +158,24 @@ class MainApp:
                               Anda mungkin ingin menambahkan FullName, RoleName, NIM_NIP, Email di sini
                               dengan memanggil DAO lain jika diperlukan.
         """
-        print(f"Login Sukses! Menampilkan halaman utama untuk UserID: {user_data['UserID']}, IsAdmin: {user_data['IsAdmin']}")
+        print(f"MainApp: show_main_app_frame called for UserID: {user_data['UserID']}, IsAdmin: {user_data['IsAdmin']}")
+
+        # --- Simpan user_data di instance MainApp ---
+        self.user_data = user_data
 
         # TODO: Ambil data CampusUser (FullName, NIM_NIP, Email, RoleName) berdasarkan UserID
         # Anda perlu membuat fungsi di user_dao.py untuk ini
         # from src.database.user_dao import get_campus_user_details_by_user_id
         # campus_user_details = get_campus_user_details_by_user_id(user_data['UserID'])
         # if campus_user_details:
-        #    user_data.update(campus_user_details) # Tambahkan detail campus user ke user_data
-
-        # Mengatur data pengguna di MainAppFrame
-        self.main_app_frame.set_user_data(user_data)
+        #    self.user_data.update(campus_user_details) # Tambahkan detail campus user ke user_data yang disimpan
 
         # Menampilkan MainAppFrame
         self.show_frame(self.main_app_frame)
 
     def show_forgot_password_frame(self):
         """Menampilkan frame Lupa Password."""
+        print("MainApp: show_forgot_password_frame called.") # Debugging print
         self.show_frame(self.forgot_password_frame)
         self.forgot_password_frame.entry_username_email.focus_set() # Set fokus ke field input
 
@@ -155,20 +187,63 @@ class MainApp:
         Args:
             reset_token (str, optional): Token reset password jika tersedia.
         """
+        print(f"MainApp: show_reset_password_frame called with token: {reset_token}") # Debugging print
         # Anda bisa meneruskan token ke frame reset password jika frame tersebut memiliki metode untuk menerimanya
-        # self.reset_password_frame.set_token(reset_token) # Perlu implementasi di ResetPasswordFrame
+        if reset_token and hasattr(self.reset_password_frame, 'set_token'):
+             self.reset_password_frame.set_token(reset_token) # Perlu implementasi di ResetPasswordFrame
         self.show_frame(self.reset_password_frame)
         # Set fokus ke field token atau password baru
         if reset_token:
-             # Jika token diberikan, set fokus ke password baru
-             # self.reset_password_frame.entry_new_password.focus_set()
-             # Dan isi field token
-             # self.reset_password_frame.entry_reset_token.delete(0, tk.END)
-             # self.reset_password_frame.entry_reset_token.insert(0, reset_token)
-             pass # Implementasi set token di ResetPasswordFrame diperlukan
+             # Jika token diberikan, set fokus ke password baru (setelah set_token)
+             pass # set_token di ResetPasswordFrame sudah menangani fokus
         else:
              # Jika token tidak diberikan (misal, navigasi manual), set fokus ke field token
              self.reset_password_frame.entry_reset_token.focus_set()
+
+    def show_report_item_frame(self):
+        """Menampilkan frame Laporkan Barang Ditemukan."""
+        print("MainApp: show_report_item_frame called.") # Debugging print
+        self.show_frame(self.report_item_frame)
+        self.report_item_frame.entry_item_name.focus_set() # Set fokus ke field pertama di form
+
+    def show_view_items_frame(self):
+        """Menampilkan frame Daftar Barang Ditemukan."""
+        print("MainApp: show_view_items_frame called.") # Debugging print
+        # load_items dan display_items dipanggil di metode show() di ViewItemsFrame
+        self.show_frame(self.view_items_frame)
+
+    def show_claim_item_frame(self, item_id):
+        """
+        Menampilkan frame Ajukan Klaim Barang untuk item tertentu.
+
+        Args:
+            item_id (int): ItemID dari barang yang akan diklaim.
+        """
+        print(f"MainApp: show_claim_item_frame called for ItemID: {item_id}") # DEBUGGING PRINT
+        # Set ItemID di ClaimItemFrame agar frame tersebut tahu barang mana yang diklaim
+        if hasattr(self.claim_item_frame, 'set_item_id'):
+             print(f"MainApp: Calling set_item_id({item_id}) on ClaimItemFrame.") # DEBUGGING PRINT
+             self.claim_item_frame.set_item_id(item_id)
+        else:
+             print("MainApp: ClaimItemFrame does not have set_item_id method.") # DEBUGGING PRINT
+
+        self.show_frame(self.claim_item_frame)
+
+    def show_my_claims_frame(self):
+        """
+        Menampilkan frame Daftar Klaim Saya.
+        """
+        print("MainApp: show_my_claims_frame called.") # Debugging print
+        # load_claims_data dan display_claims dipanggil di metode show() di MyClaimsFrame
+        self.show_frame(self.my_claims_frame)
+
+    def show_admin_panel_frame(self):
+        """
+        Menampilkan frame Panel Admin.
+        """
+        print("MainApp: show_admin_panel_frame called.") # Debugging print
+        # load_pending_claims dan display_claims dipanggil di metode show() di AdminPanelFrame
+        self.show_frame(self.admin_panel_frame)
 
 
 # --- Jalankan Aplikasi ---

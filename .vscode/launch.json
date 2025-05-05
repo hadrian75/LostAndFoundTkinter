@@ -54,7 +54,7 @@
             "name": "Run ImageKit Service",
             "type": "debugpy",
             "request": "launch",
-            "module": "src.firebase.imagekit_service", // Configuration for ImageKit Service (assuming firebase folder name)
+            "module": "src.image_storage.imagekit_service", // Configuration for ImageKit Service (assuming firebase folder name)
             "console": "integratedTerminal"
         },
          {

@@ -161,8 +161,12 @@ def verify_email_token(user_id, token):
     Memverifikasi token email dan mengaktifkan akun pengguna jika valid.
     Mengembalikan True jika verifikasi berhasil, False jika gagal.
     """
+    print(f"Attempting to verify email token for UserID: {user_id}, Token: {token}") # DEBUG PRINT START
+    print(f"Type of user_id: {type(user_id)}, Type of token: {type(token)}") # DEBUG PRINT TYPES
+
     conn = create_db_connection()
     if conn is None:
+        print("Database connection failed in verify_email_token.") # DEBUG PRINT CONN FAILED
         return False
 
     cursor = conn.cursor()
@@ -173,11 +177,13 @@ def verify_email_token(user_id, token):
 
         # Cari token yang cocok untuk UserID dan Token yang diberikan, belum digunakan, dan belum kedaluwarsa
         sql_find_token = "SELECT TokenID, ExpiryTime, IsUsed FROM EmailVerificationToken WHERE UserID = %s AND Token = %s"
+        print(f"Executing SQL: {sql_find_token} with params: {(user_id, token)}") # DEBUG PRINT EXECUTE
         cursor.execute(sql_find_token, (user_id, token))
         token_data = cursor.fetchone()
 
         if token_data:
             token_id, expiry_time, is_used = token_data
+            print(f"Token data fetched: TokenID={token_id}, ExpiryTime={expiry_time}, IsUsed={is_used}") # DEBUG PRINT FETCHED
 
             if is_used:
                 print(f"Verification failed for UserID {user_id}: Token already used.")
@@ -185,7 +191,7 @@ def verify_email_token(user_id, token):
                 conn.rollback()
                 return False
 
-            # Perbandingan waktu kedaluwatan
+            # Perbandingan waktu kedaluwarsa
             if expiry_time < datetime.datetime.now():
                 print(f"Verification failed for UserID {user_id}: Token expired.")
                 # messagebox.showwarning("Verifikasi Gagal", "Token sudah kedaluwarsa.") # Opsional: Tampilkan di GUI
@@ -194,10 +200,12 @@ def verify_email_token(user_id, token):
 
             # Token valid, aktifkan akun pengguna
             sql_activate_user = "UPDATE Users SET IsActive = TRUE WHERE UserID = %s"
+            print(f"Executing SQL: {sql_activate_user} with param: {(user_id,)}") # DEBUG PRINT EXECUTE ACTIVATE
             cursor.execute(sql_activate_user, (user_id,))
 
             # Tandai token sebagai sudah digunakan
             sql_mark_used = "UPDATE EmailVerificationToken SET IsUsed = TRUE WHERE TokenID = %s"
+            print(f"Executing SQL: {sql_mark_used} with param: {(token_id,)}") # DEBUG PRINT EXECUTE MARK USED
             cursor.execute(sql_mark_used, (token_id,))
 
             conn.commit()
@@ -215,9 +223,14 @@ def verify_email_token(user_id, token):
         conn.rollback()
         print(f"Database Error in verify_email_token: {err}") # Log error
         verification_success = False
+    except Exception as e:
+        conn.rollback() # Ensure rollback on unexpected errors too
+        print(f"An unexpected error occurred in verify_email_token: {e}") # Log error tak terduga
+        verification_success = False
     finally:
         cursor.close()
         close_db_connection(conn)
+        print(f"verify_email_token finished for UserID: {user_id}, Token: {token}. Success: {verification_success}") # DEBUG PRINT END
         return verification_success
 
 def request_password_reset(username_or_email):
@@ -294,6 +307,7 @@ def request_password_reset(username_or_email):
         print(f"Database Error in request_password_reset: {err}") # Log error
         return None, None, None
     except Exception as e:
+        conn.rollback() # Ensure rollback on unexpected errors too
         print(f"An unexpected error occurred in request_password_reset: {e}") # Log error tak terduga
         return None, None, None
     finally:
@@ -362,6 +376,7 @@ def reset_password_with_token(token, new_plain_password):
         print(f"Database Error in reset_password_with_token: {err}") # Log error
         reset_success = False
     except Exception as e:
+        conn.rollback() # Ensure rollback on unexpected errors too
         print(f"An unexpected error occurred in reset_password_with_token: {e}") # Log error tak terduga
         reset_success = False
     finally:

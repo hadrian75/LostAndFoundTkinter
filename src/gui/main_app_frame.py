@@ -2,15 +2,12 @@
 
 import tkinter as tk
 from tkinter import messagebox
-from .base_frame import BaseFrame # Mengimpor BaseFrame dari paket gui
-# Anda mungkin perlu mengimpor DAO lain di sini nanti (misal: item_dao, claim_dao)
-# from src.database.item_dao import get_all_items
-# from src.database.claim_dao import get_claims_by_user
+from .base_frame import BaseFrame # Mengimpor BaseFrame
 
 class MainAppFrame(BaseFrame):
     """
-    Frame untuk halaman utama aplikasi setelah login berhasil.
-    Akan menampilkan konten berbeda tergantung peran pengguna.
+    Frame untuk halaman utama aplikasi setelah pengguna login.
+    Menampilkan informasi pengguna dan opsi navigasi ke fitur lain.
     """
     def __init__(self, parent, main_app):
         """
@@ -21,116 +18,141 @@ class MainAppFrame(BaseFrame):
             main_app: Referensi ke instance kelas MainApp.
         """
         super().__init__(parent, main_app)
-        self.user_data = None # Untuk menyimpan data pengguna yang sedang login
+        self.user_data = None # Untuk menyimpan data pengguna yang login
+
+        # Frame untuk menampung konten utama
+        # Widget ini dibuat di __init__ dan tidak dihancurkan oleh clear_widgets
+        self.content_frame = tk.Frame(self)
+        self.content_frame.pack(expand=True, fill='both', padx=20, pady=20) # Tambahkan padding
+
+        # create_widgets TIDAK dipanggil di sini lagi
+        # self.create_widgets() # <--- HAPUS BARIS INI
+
+    def create_widgets(self):
+        """Membuat widget untuk frame utama aplikasi."""
+        # self.clear_widgets() # <--- HAPUS BARIS INI. Widget akan dihapus secara manual jika perlu.
+
+        # Bersihkan widget dari content_frame sebelum membuatnya kembali
+        # Ini penting jika create_widgets dipanggil ulang (misal di show())
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+
+
+        # Label Selamat Datang
+        # Teks akan diupdate di set_user_data
+        self.label_welcome = tk.Label(self.content_frame, text="Selamat Datang", font=('Arial', 20, 'bold'))
+        self.label_welcome.pack(pady=(20, 10))
+
+        # Label Informasi Pengguna (akan diupdate di set_user_data)
+        self.label_user_info = tk.Label(self.content_frame, text="", font=('Arial', 12))
+        self.label_user_info.pack(pady=(0, 30))
+
+        # Frame untuk menampung tombol-tombol navigasi
+        button_frame = tk.Frame(self.content_frame)
+        button_frame.pack(pady=10)
+
+        # Tombol Laporkan Barang Ditemukan
+        tk.Button(button_frame, text="Laporkan Barang Ditemukan", command=self.main_app.show_report_item_frame, width=30, height=2).grid(row=0, column=0, padx=10, pady=10)
+
+        # Tombol Lihat Barang Ditemukan
+        tk.Button(button_frame, text="Lihat Barang Ditemukan", command=self.main_app.show_view_items_frame, width=30, height=2).grid(row=0, column=1, padx=10, pady=10)
+
+        # Tombol Lihat Klaim Saya
+        tk.Button(button_frame, text="Lihat Klaim Saya", command=self.main_app.show_my_claims_frame, width=30, height=2).grid(row=1, column=0, padx=10, pady=10)
+
+        # Tombol Panel Admin (Awalnya Dibuat, Visibilitas Diatur di set_user_data)
+        # Gunakan grid() untuk menempatkannya, tapi simpan referensi agar bisa diatur visibilitasnya
+        self.button_admin_panel = tk.Button(button_frame, text="Panel Admin", command=self.main_app.show_admin_panel_frame, width=30, height=2)
+        # Jangan panggil .grid() di sini secara langsung, panggil di set_user_data
+        # self.button_admin_panel.grid(row=1, column=1, padx=10, pady=10)
+
+
+        # TODO: Tambahkan tombol atau link lain di sini
+        # Misalnya:
+        # - Lihat Barang Hilang (jika ada fitur pelaporan barang hilang)
+        # - Pengaturan Akun
+
+        # Tombol Logout
+        tk.Button(self.content_frame, text="Logout", command=self.handle_logout, width=20).pack(pady=30)
+
+        # Simpan referensi ke button_frame agar bisa diakses di set_user_data
+        self.button_frame = button_frame
+
 
     def set_user_data(self, user_data):
         """
-        Mengatur data pengguna yang sedang login dan memperbarui tampilan frame.
-
-        Args:
-            user_data (dict): Dictionary berisi data pengguna yang login (UserID, IsActive, IsAdmin).
-                              Anda mungkin ingin mengambil data CampusUser (FullName, RoleID, NIM_NIP, Email)
-                              di sini atau di LoginFrame dan meneruskannya.
+        Mengatur data pengguna yang login dan memperbarui tampilan.
+        Dipanggil oleh MainApp setelah login berhasil.
         """
+        print(f"MainAppFrame: set_user_data called with user_data: {user_data}") # DEBUG PRINT
         self.user_data = user_data
-        print(f"MainAppFrame received user data: {self.user_data}") # Debugging print
-        self.create_widgets() # Panggil ulang create_widgets untuk memperbarui UI berdasarkan user_data
+        if self.user_data:
+            # TODO: Ambil FullName, RoleName, NIM_NIP dari user_data jika sudah ditambahkan di MainApp
+            # Untuk saat ini, gunakan UserID dan status admin
+            username = self.user_data.get('Username', 'Pengguna') # Asumsi username ada di user_data
+            is_admin = self.user_data.get('IsAdmin', False)
+            user_id = self.user_data.get('UserID', 'N/A')
 
-    def create_widgets(self):
-        """
-        Membuat widget untuk halaman utama.
-        Layout dan konten bisa berbeda berdasarkan self.user_data (terutama IsAdmin).
-        """
-        self.clear_widgets() # Bersihkan widget lama
+            welcome_text = f"Selamat Datang, {username}!"
+            info_text = f"UserID: {user_id} | Status: {'Admin' if is_admin else 'Pengguna Biasa'}"
+            # TODO: Jika FullName, RoleName, NIM_NIM tersedia di user_data, gunakan itu
+            # info_text = f"Nama: {self.user_data.get('FullName', 'N/A')} | NIM/NIP: {self.user_data.get('NIM_NIP', 'N/A')} | Peran: {self.user_data.get('RoleName', 'N/A')}"
 
-        if self.user_data is None:
-            # Tampilkan pesan error atau kembali ke login jika data user tidak ada
-            tk.Label(self, text="Error: User data not loaded.", fg="red").pack(pady=20)
-            tk.Button(self, text="Kembali ke Login", command=self.main_app.show_login_frame).pack(pady=10)
-            return
 
-        # --- Bagian Header/Selamat Datang ---
-        # Anda perlu mengambil FullName dari CampusUsers berdasarkan UserID
-        # Untuk demo, kita pakai Username dulu atau tambahkan logika ambil FullName
-        # Asumsi user_data sekarang juga menyertakan FullName (Anda bisa tambahkan ini di authenticate_user DAO)
-        # Atau ambil FullName di sini:
-        # full_name = get_full_name_by_user_id(self.user_data['UserID']) # Perlu fungsi DAO baru
+            # Periksa apakah widget sudah dibuat sebelum mencoba mengkonfigurasinya
+            if hasattr(self, 'label_welcome'):
+                 self.label_welcome.config(text=welcome_text)
+            if hasattr(self, 'label_user_info'):
+                 self.label_user_info.config(text=info_text)
 
-        # Untuk demo, gunakan Username atau tambahkan FullName ke user_data di MainApp
-        username = self.user_data.get('Username', 'Pengguna') # Ambil Username jika ada, default 'Pengguna'
-        # Jika Anda sudah memodifikasi authenticate_user untuk mengembalikan FullName:
-        # full_name = self.user_data.get('FullName', username)
+            # --- Logika untuk menampilkan/menyembunyikan tombol Admin Panel ---
+            if hasattr(self, 'button_admin_panel'):
+                 if is_admin:
+                      # Tampilkan tombol admin panel di grid
+                      self.button_admin_panel.grid(row=1, column=1, padx=10, pady=10)
+                 else:
+                      # Sembunyikan tombol admin panel
+                      self.button_admin_panel.grid_forget()
 
-        tk.Label(self, text=f"Selamat Datang, {username}!", font=('Arial', 18, 'bold')).pack(pady=(20, 10))
-        tk.Label(self, text=f"Role: {'Admin' if self.user_data.get('IsAdmin') else 'Pengguna Biasa'}").pack(pady=(0, 20))
-        # Anda bisa tampilkan NIM/NIP, Email, dll di sini
-
-        # --- Bagian Konten Utama (Bisa Berbeda untuk Admin) ---
-
-        if self.user_data.get('IsAdmin'):
-            # --- Tampilan untuk Admin ---
-            tk.Label(self, text="Panel Admin", font=('Arial', 16)).pack(pady=10)
-            tk.Button(self, text="Kelola Barang Hilang/Ditemukan", command=self.show_manage_items).pack(pady=5)
-            tk.Button(self, text="Verifikasi Klaim", command=self.show_verify_claims).pack(pady=5)
-            tk.Button(self, text="Kelola Pengguna", command=self.show_manage_users).pack(pady=5)
-            # Tambahkan tombol/opsi khusus admin lainnya
 
         else:
-            # --- Tampilan untuk Pengguna Biasa (Student/Staff) ---
-            tk.Label(self, text="Menu Pengguna", font=('Arial', 16)).pack(pady=10)
-            tk.Button(self, text="Lihat Barang Ditemukan", command=self.show_view_found_items).pack(pady=5)
-            tk.Button(self, text="Laporkan Barang Ditemukan", command=self.show_report_item).pack(pady=5)
-            tk.Button(self, text="Lihat Klaim Saya", command=self.show_my_claims).pack(pady=5)
-            tk.Button(self, text="Lihat Notifikasi", command=self.show_notifications).pack(pady=5)
-            # Tambahkan tombol/opsi pengguna lainnya
+            # Jika user_data None (misal setelah logout), reset tampilan
+            # Periksa apakah widget sudah dibuat sebelum mencoba mengkonfigurasinya
+            if hasattr(self, 'label_welcome'):
+                 self.label_welcome.config(text="Selamat Datang")
+            if hasattr(self, 'label_user_info'):
+                 self.label_user_info.config(text="Silakan Login")
+            # Sembunyikan tombol-tombol navigasi jika user tidak login (opsional, tergantung alur)
+            # self.content_frame.pack_forget() # Atau sembunyikan frame tombol
 
-        # --- Tombol Logout ---
-        tk.Button(self, text="Logout", command=self.handle_logout, width=20).pack(pady=30)
+            # Pastikan tombol admin juga disembunyikan saat logout
+            if hasattr(self, 'button_admin_panel'):
+                 self.button_admin_panel.grid_forget()
+
 
     def handle_logout(self):
-        """Menangani aksi logout."""
-        # Reset data pengguna yang login
-        self.user_data = None
-        messagebox.showinfo("Logout", "Anda telah berhasil logout.")
-        # Kembali ke halaman login
-        self.main_app.show_login_frame()
+        """
+        Menangani aksi saat tombol 'Logout' diklik.
+        Mer es et data pengguna dan kembali ke halaman login.
+        """
+        print("User logged out.") # Debugging print
+        self.user_data = None # Bersihkan data pengguna yang login
+        messagebox.showinfo("Logout Sukses", "Anda telah berhasil logout.")
+        self.main_app.show_login_frame() # Kembali ke halaman login
 
-    # --- Placeholder methods for navigation ---
-    # Metode ini akan dipanggil saat tombol di frame ini diklik
-    # MainApp akan mengimplementasikan metode show_..._frame yang sesuai
+    def show(self):
+        """Menampilkan frame ini."""
+        print("MainAppFrame: show called.") # Debugging print
+        # Panggil create_widgets di sini untuk memastikan UI dibuat/diperbarui saat frame ditampilkan
+        self.create_widgets()
+        # Panggil set_user_data *setelah* create_widgets selesai
+        # self.main_app.user_data sudah diset di show_main_app_frame sebelum show() dipanggil
+        self.set_user_data(self.main_app.user_data) # PANGGIL DI SINI
+        super().show() # Panggil metode show dari BaseFrame (pack frame)
 
-    def show_manage_items(self):
-        """Placeholder untuk navigasi ke halaman kelola barang (Admin)."""
-        print("Navigasi ke halaman Kelola Barang (Admin)")
-        # self.main_app.show_manage_items_frame() # Panggil metode di MainApp
 
-    def show_verify_claims(self):
-        """Placeholder untuk navigasi ke halaman verifikasi klaim (Admin)."""
-        print("Navigasi ke halaman Verifikasi Klaim (Admin)")
-        # self.main_app.show_verify_claims_frame() # Panggil metode di MainApp
-
-    def show_manage_users(self):
-        """Placeholder untuk navigasi ke halaman kelola pengguna (Admin)."""
-        print("Navigasi ke halaman Kelola Pengguna (Admin)")
-        # self.main_app.show_manage_users_frame() # Panggil metode di MainApp
-
-    def show_view_found_items(self):
-        """Placeholder untuk navigasi ke halaman lihat barang ditemukan (Pengguna)."""
-        print("Navigasi ke halaman Lihat Barang Ditemukan")
-        # self.main_app.show_view_found_items_frame() # Panggil metode di MainApp
-
-    def show_report_item(self):
-        """Placeholder untuk navigasi ke halaman laporkan barang (Pengguna)."""
-        print("Navigasi ke halaman Laporkan Barang Ditemukan")
-        # self.main_app.show_report_item_frame() # Panggil metode di MainApp
-
-    def show_my_claims(self):
-        """Placeholder untuk navigasi ke halaman lihat klaim saya (Pengguna)."""
-        print("Navigasi ke halaman Lihat Klaim Saya")
-        # self.main_app.show_my_claims_frame() # Panggil metode di MainApp
-
-    def show_notifications(self):
-        """Placeholder untuk navigasi ke halaman notifikasi (Pengguna)."""
-        print("Navigasi ke halaman Notifikasi")
-        # self.main_app.show_notifications_frame() # Panggil metode di MainApp
-
+    def hide(self):
+        """Menyembunyikan frame ini."""
+        print("MainAppFrame: hide called.") # Debugging print
+        super().hide()
+        # Tidak perlu mereset user_data di hide(), biarkan tetap ada sampai logout
