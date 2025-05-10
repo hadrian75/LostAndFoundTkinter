@@ -5,7 +5,10 @@ import datetime
 # Mengimpor fungsi koneksi database dari db_connector
 from src.database.db_connector import create_db_connection, close_db_connection
 # Mengimpor fungsi untuk update item status dari item_dao
+# Kita akan tambahkan atau pastikan fungsi ini ada di item_dao.py nanti
 from src.database.item_dao import update_item_status # Asumsi fungsi ini ada/akan ada
+# Mengimpor fungsi add_notification dari notification_dao
+from src.database.notification_dao import add_notification # Impor fungsi add_notification
 
 def add_claim(item_id, claimed_by_user_id, claim_details, proof_image_urls):
     """
@@ -166,42 +169,12 @@ def get_pending_claims():
         cursor.close()
         close_db_connection(conn)
 
-def get_claim_images_by_claim_id(claim_id):
-    """
-    Mengambil daftar URL gambar bukti untuk klaim tertentu.
-    Mengembalikan list of strings (URL gambar) jika ditemukan, list kosong jika tidak atau error.
-    """
-    print(f"Attempting to fetch claim images for ClaimID: {claim_id}") # Debugging print
-    conn = create_db_connection()
-    if conn is None:
-        return [] # Gagal koneksi
-
-    cursor = conn.cursor() # Tidak perlu dictionary=True jika hanya mengambil satu kolom
-    image_urls = []
-
-    try:
-        # Query untuk mengambil semua ImageURL dari tabel ClaimImages untuk ClaimID tertentu
-        sql = "SELECT ImageURL FROM ClaimImages WHERE ClaimID = %s"
-        cursor.execute(sql, (claim_id,))
-        results = cursor.fetchall() # Ambil semua baris hasil
-
-        # Ekstrak URL dari hasil query (hasilnya adalah list of tuples, misal: [('url1',), ('url2',)])
-        image_urls = [row[0] for row in results]
-
-        print(f"Found {len(image_urls)} claim images for ClaimID {claim_id}.") # Debugging print
-        return image_urls
-
-    except mysql.connector.Error as err:
-        print(f"Database Error in get_claim_images_by_claim_id: {err}") # Log error
-        return [] # Kembalikan list kosong jika terjadi error
-    finally:
-        cursor.close()
-        close_db_connection(conn)
-
-
 def update_claim_status(claim_id, new_status):
     """
     Memperbarui status verifikasi klaim di tabel Claims.
+    Mengirim notifikasi ke pengguna yang mengajukan klaim.
+    Jika status disetujui ('Approved'), juga perbarui status item terkait menjadi 'Claimed'
+    dan set IsActive item menjadi FALSE.
 
     Args:
         claim_id (int): ClaimID dari klaim yang akan diperbarui.
@@ -215,29 +188,131 @@ def update_claim_status(claim_id, new_status):
     if conn is None:
         return False
 
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True) # Gunakan dictionary=True untuk mengambil data klaim
     success = False
+    claimed_by_user_id = None
+    item_id = None
+    item_name = None
 
     try:
+        conn.start_transaction() # Mulai transaksi
+
+        # 1. Ambil data klaim (terutama ClaimedBy dan ItemID) SEBELUM diupdate
+        sql_get_claim_info = """
+            SELECT
+                C.ClaimedBy,
+                C.ItemID,
+                I.ItemName -- Ambil nama barang untuk notifikasi
+            FROM
+                Claims C
+            JOIN
+                Items I ON C.ItemID = I.ItemID
+            WHERE
+                C.ClaimID = %s
+        """
+        cursor.execute(sql_get_claim_info, (claim_id,))
+        claim_info = cursor.fetchone()
+
+        if claim_info:
+            claimed_by_user_id = claim_info['ClaimedBy']
+            item_id = claim_info['ItemID']
+            item_name = claim_info['ItemName']
+            print(f"Claim info found: ClaimedBy={claimed_by_user_id}, ItemID={item_id}, ItemName='{item_name}'") # Debugging print
+        else:
+            print(f"ClaimID {claim_id} not found for status update.")
+            conn.rollback() # Rollback karena klaim tidak ditemukan
+            return False # Gagal karena klaim tidak ada
+
+
+        # 2. Perbarui status verifikasi klaim di tabel Claims
         # Pastikan new_status adalah nilai yang valid untuk ENUM
         if new_status not in ['Approved', 'Rejected']:
             print(f"Invalid status '{new_status}' for claim update.")
+            conn.rollback() # Rollback karena status tidak valid
             return False
 
-        sql = "UPDATE Claims SET VerificationStatus = %s WHERE ClaimID = %s"
-        cursor.execute(sql, (new_status, claim_id))
+        sql_update_claim = "UPDATE Claims SET VerificationStatus = %s WHERE ClaimID = %s"
+        cursor.execute(sql_update_claim, (new_status, claim_id))
+        print(f"ClaimID {claim_id} status updated to '{new_status}'.") # Debugging print
+
+
+        # 3. Jika status disetujui, perbarui status item terkait
+        if new_status == 'Approved' and item_id is not None:
+            print(f"Claim Approved. Attempting to update ItemID {item_id} status to 'Claimed'...") # Debugging print
+            # Panggil fungsi update_item_status dari item_dao
+            # Fungsi ini juga akan set IsActive item menjadi FALSE
+            item_update_success = update_item_status(item_id, 'Claimed')
+            if item_update_success:
+                print(f"ItemID {item_id} status successfully updated to 'Claimed'.") # Debugging print
+            else:
+                print(f"Failed to update ItemID {item_id} status to 'Claimed'.") # Debugging print
+                # Anda bisa memilih untuk membatalkan seluruh transaksi di sini
+                # atau melanjutkan tapi log errornya. Kita log error dan lanjutkan.
+
+
+        # 4. Kirim notifikasi ke pengguna yang mengajukan klaim
+        if claimed_by_user_id is not None:
+            notification_message = f"Status klaim Anda untuk barang '{item_name}' telah diperbarui menjadi '{new_status}'."
+            print(f"Attempting to send notification to UserID {claimed_by_user_id}: '{notification_message}'") # Debugging print
+            # Panggil fungsi add_notification dari notification_dao
+            notification_id = add_notification(claimed_by_user_id, notification_message)
+            if notification_id:
+                print(f"Notification sent successfully with ID: {notification_id}") # Debugging print
+            else:
+                print("Failed to send notification.") # Debugging print
+                # Log error, tapi jangan batalkan transaksi utama hanya karena notifikasi gagal
+
+
+        # Commit transaksi jika semua operasi database berhasil
         conn.commit()
         success = True
-        print(f"ClaimID {claim_id} status updated to '{new_status}'.")
+        print(f"ClaimID {claim_id} status update process completed successfully.") # Debugging print
+
 
     except mysql.connector.Error as err:
-        conn.rollback()
+        conn.rollback() # Rollback jika terjadi error database
         print(f"Database Error in update_claim_status: {err}") # Log error
+        success = False
+    except Exception as e:
+        conn.rollback()
+        print(f"An unexpected error occurred in update_claim_status: {e}") # Log error tak terduga
         success = False
     finally:
         cursor.close()
         close_db_connection(conn)
         return success
+
+# --- Fungsi Baru: get_claim_images_by_claim_id ---
+def get_claim_images_by_claim_id(claim_id):
+    """
+    Mengambil daftar semua URL gambar bukti untuk klaim tertentu berdasarkan ClaimID.
+    Mengembalikan list of strings (URL gambar), atau list kosong jika tidak ada gambar atau error.
+    """
+    print(f"Attempting to fetch all proof image URLs for ClaimID: {claim_id}") # Debugging print
+    conn = create_db_connection()
+    if conn is None:
+        return [] # Gagal koneksi
+
+    cursor = conn.cursor() # Tidak perlu dictionary=True karena hanya mengambil satu kolom
+    image_urls_list = []
+
+    try:
+        # Query untuk mengambil semua ImageURL berdasarkan ClaimID dari tabel ClaimImages
+        sql = "SELECT ImageURL FROM ClaimImages WHERE ClaimID = %s"
+        cursor.execute(sql, (claim_id,))
+        # fetchall() akan mengembalikan list of tuples, ambil elemen pertama dari setiap tuple
+        image_urls_list = [row[0] for row in cursor.fetchall()]
+
+        print(f"Found {len(image_urls_list)} proof image URLs for ClaimID {claim_id}.") # Debugging print
+        return image_urls_list
+
+    except mysql.connector.Error as err:
+        print(f"Database Error in get_claim_images_by_claim_id: {err}") # Log error
+        return [] # Kembalikan list kosong jika terjadi error
+    finally:
+        cursor.close()
+        close_db_connection(conn)
+
 
 # TODO: Tambahkan fungsi DAO lain untuk Claims (misal: get_claims_by_item)
 # def get_claims_by_item(item_id):
@@ -253,7 +328,6 @@ if __name__ == "__main__":
     # Pastikan Anda memiliki koneksi database yang berfungsi dan tabel Claims/ClaimImages
     # Pastikan ada user dengan UserID 1 dan item dengan ItemID 1 di database Anda
     # Pastikan ada beberapa klaim dengan status 'Pending' untuk pengujian get_pending_claims
-    # Pastikan ada klaim dengan gambar bukti untuk pengujian get_claim_images_by_claim_id
 
     # --- Test add_claim ---
     # print("\n--- Testing add_claim ---")
@@ -299,17 +373,36 @@ if __name__ == "__main__":
     else:
         print("No 'Pending' claims found or failed to fetch.")
 
+    # --- Test update_claim_status ---
+    # Asumsi ada klaim dengan ClaimID 1 yang statusnya 'Pending'
+    # test_claim_id_to_update = 1 # Ganti dengan ClaimID yang ada dan statusnya 'Pending'
+    # print(f"\n--- Testing update_claim_status for ClaimID {test_claim_id_to_update} ---")
+    # # Coba update status menjadi 'Approved'
+    # update_success = update_claim_status(test_claim_id_to_update, 'Approved')
+    # if update_success:
+    #     print(f"Status update for ClaimID {test_claim_id_to_update} successful.")
+    # else:
+    #     print(f"Status update for ClaimID {test_claim_id_to_update} failed.")
+
+    # # Coba update status menjadi 'Rejected'
+    # # update_success = update_claim_status(test_claim_id_to_update, 'Rejected')
+    # # if update_success:
+    # #     print(f"Status update for ClaimID {test_claim_id_to_update} successful.")
+    # # else:
+    # #     print(f"Status update for ClaimID {test_claim_id_to_update} failed.")
+
+
     # --- Test get_claim_images_by_claim_id ---
-    # Ganti dengan ClaimID yang ada di database Anda dan memiliki gambar bukti
-    test_claim_id_with_images = 1 # Ganti dengan ClaimID yang valid
+    # Asumsi ada klaim dengan ClaimID yang memiliki gambar bukti di database
+    # Ganti 1 dengan ClaimID yang pasti punya gambar bukti di DB Anda
+    test_claim_id_with_images = 1 # <--- GANTI DENGAN CLAIMID YANG PUNYA GAMBAR BUKTI
     print(f"\n--- Testing get_claim_images_by_claim_id for ClaimID {test_claim_id_with_images} ---")
-    claim_images = get_claim_images_by_claim_id(test_claim_id_with_images)
+    claim_image_urls = get_claim_images_by_claim_id(test_claim_id_with_images)
 
-    if claim_images:
-        print(f"Successfully fetched {len(claim_images)} images for ClaimID {test_claim_id_with_images}:")
-        for url in claim_images:
-            print(f"  Image URL: {url}")
+    if claim_image_urls:
+        print(f"Successfully fetched {len(claim_image_urls)} proof image URLs for ClaimID {test_claim_id_with_images}:")
+        for url in claim_image_urls:
+            print(f"  - {url}")
     else:
-        print(f"No images found for ClaimID {test_claim_id_with_images} or failed to fetch.")
-
+        print(f"No proof image URLs found for ClaimID {test_claim_id_with_images} or failed to fetch.")
 

@@ -21,7 +21,8 @@ from src.gui.report_item_frame import ReportItemFrame
 from src.gui.view_items_frame import ViewItemsFrame
 from src.gui.claim_item_frame import ClaimItemFrame
 from src.gui.my_claims_frame import MyClaimsFrame
-from src.gui.admin_panel_frame import AdminPanelFrame # Impor AdminPanelFrame yang baru
+from src.gui.admin_panel_frame import AdminPanelFrame
+from src.gui.notifications_frame import NotificationsFrame # Impor NotificationsFrame yang baru
 
 
 # Mengakses konfigurasi lain dari .env jika diperlukan
@@ -61,13 +62,14 @@ class MainApp:
         self.otp_frame = OTPFrame(self.root, self)
         self.main_app_frame = MainAppFrame(self.root, self)
         self.forgot_password_frame = ForgotPasswordFrame(self.root, self)
-        self.reset_password_frame = ResetPasswordFrame(self.root, self) # Pastikan instance ini dibuat
+        self.reset_password_frame = ResetPasswordFrame(self.root, self)
         self.report_item_frame = ReportItemFrame(self.root, self)
         self.view_items_frame = ViewItemsFrame(self.root, self)
         self.claim_item_frame = ClaimItemFrame(self.root, self)
         self.my_claims_frame = MyClaimsFrame(self.root, self)
-        self.admin_panel_frame = AdminPanelFrame(self.root, self) # Buat instance AdminPanelFrame yang baru
-        # Buat instance frame lain di sini (misal: AdminFrame, etc.)
+        self.admin_panel_frame = AdminPanelFrame(self.root, self)
+        self.notifications_frame = NotificationsFrame(self.root, self) # Buat instance NotificationsFrame yang baru
+        # Buat instance frame lain di sini
 
 
         # Tampilkan frame pertama saat aplikasi dimulai (Login)
@@ -99,7 +101,7 @@ class MainApp:
             self.forgot_password_frame.hide()
         except AttributeError: pass
         try:
-            self.reset_password_frame.hide() # Pastikan reset_password_frame disembunyikan
+            self.reset_password_frame.hide()
         except AttributeError: pass
         try:
             self.report_item_frame.hide()
@@ -110,11 +112,14 @@ class MainApp:
         try:
             self.claim_item_frame.hide()
         except AttributeError: pass
-        try: # Tambahkan AdminPanelFrame ke daftar yang disembunyikan
+        try:
+            self.my_claims_frame.hide()
+        except AttributeError: pass
+        try:
             self.admin_panel_frame.hide()
         except AttributeError: pass
-        try: # Tambahkan MyClaimsFrame ke daftar yang disembunyikan
-             self.my_claims_frame.hide()
+        try:
+            self.notifications_frame.hide() # Pastikan notifications_frame disembunyikan
         except AttributeError: pass
         # Sembunyikan frame lain di sini
 
@@ -182,8 +187,6 @@ class MainApp:
         self.show_frame(self.forgot_password_frame)
         self.forgot_password_frame.entry_username_email.focus_set() # Set fokus ke field input
 
-    # --- PERUBAHAN UNTUK ALUR Forgot -> Reset ---
-    # show_reset_password_frame sekarang menerima token
     def show_reset_password_frame(self, reset_token=None):
         """
         Menampilkan frame Reset Password.
@@ -250,6 +253,15 @@ class MainApp:
         print("MainApp: show_admin_panel_frame called.") # Debugging print
         # load_pending_claims dan display_claims dipanggil di metode show() di AdminPanelFrame
         self.show_frame(self.admin_panel_frame)
+
+    # --- Metode Baru untuk Menampilkan Frame Notifikasi ---
+    def show_notifications_frame(self):
+        """
+        Menampilkan frame Notifikasi Pengguna.
+        """
+        print("MainApp: show_notifications_frame called.") # Debugging print
+        # load_notifications_data dan display_notifications dipanggil di metode show() di NotificationsFrame
+        self.show_frame(self.notifications_frame)
 
 
 # --- Jalankan Aplikasi ---

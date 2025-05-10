@@ -1,8 +1,11 @@
 # src/gui/main_app_frame.py
 
 import tkinter as tk
+from tkinter import ttk # Menggunakan ttk untuk widget seperti Frame atau Button
 from tkinter import messagebox
 from .base_frame import BaseFrame # Mengimpor BaseFrame
+# Mengimpor fungsi DAO untuk mengambil jumlah notifikasi belum dibaca
+from src.database.notification_dao import get_unread_notifications_count # Import fungsi baru
 
 class MainAppFrame(BaseFrame):
     """
@@ -24,6 +27,10 @@ class MainAppFrame(BaseFrame):
         # Widget ini dibuat di __init__ dan tidak dihancurkan oleh clear_widgets
         self.content_frame = tk.Frame(self)
         self.content_frame.pack(expand=True, fill='both', padx=20, pady=20) # Tambahkan padding
+
+        # Variabel untuk menyimpan jumlah notifikasi belum dibaca
+        self.unread_notifications_count = 0
+        # Label atau teks tombol notifikasi akan diupdate secara berkala
 
         # create_widgets TIDAK dipanggil di sini lagi
         # self.create_widgets() # <--- HAPUS BARIS INI
@@ -60,9 +67,15 @@ class MainAppFrame(BaseFrame):
         # Tombol Lihat Klaim Saya
         tk.Button(button_frame, text="Lihat Klaim Saya", command=self.main_app.show_my_claims_frame, width=30, height=2).grid(row=1, column=0, padx=10, pady=10)
 
+        # Tombol Notifikasi
+        # Teks tombol akan diupdate nanti dengan jumlah notifikasi belum dibaca
+        self.button_notifications = tk.Button(button_frame, text="Notifikasi", command=self.main_app.show_notifications_frame, width=30, height=2)
+        self.button_notifications.grid(row=1, column=1, padx=10, pady=10)
+
+
         # Tombol Panel Admin (Awalnya Dibuat, Visibilitas Diatur di set_user_data)
         # Gunakan grid() untuk menempatkannya, tapi simpan referensi agar bisa diatur visibilitasnya
-        self.button_admin_panel = tk.Button(button_frame, text="Panel Admin", command=self.main_app.show_admin_panel_frame, width=30, height=2)
+        self.button_admin_panel = tk.Button(button_frame, text="Panel Admin", command=self.main_app.show_admin_panel_frame, width=30, height=2, bg="lightblue") # Warna berbeda untuk admin
         # Jangan panggil .grid() di sini secara langsung, panggil di set_user_data
         # self.button_admin_panel.grid(row=1, column=1, padx=10, pady=10)
 
@@ -109,7 +122,7 @@ class MainAppFrame(BaseFrame):
             if hasattr(self, 'button_admin_panel'):
                  if is_admin:
                       # Tampilkan tombol admin panel di grid
-                      self.button_admin_panel.grid(row=1, column=1, padx=10, pady=10)
+                      self.button_admin_panel.grid(row=2, column=0, padx=10, pady=10) # Pindahkan ke row 2, col 0
                  else:
                       # Sembunyikan tombol admin panel
                       self.button_admin_panel.grid_forget()
@@ -133,26 +146,63 @@ class MainAppFrame(BaseFrame):
     def handle_logout(self):
         """
         Menangani aksi saat tombol 'Logout' diklik.
-        Mer es et data pengguna dan kembali ke halaman login.
+        Mereset data pengguna dan kembali ke halaman login.
         """
         print("User logged out.") # Debugging print
         self.user_data = None # Bersihkan data pengguna yang login
         messagebox.showinfo("Logout Sukses", "Anda telah berhasil logout.")
         self.main_app.show_login_frame() # Kembali ke halaman login
 
+    def update_notification_count(self):
+        """
+        Mengambil jumlah notifikasi belum dibaca dan memperbarui teks tombol Notifikasi.
+        """
+        logged_in_user_id = self.user_data.get('UserID') if self.user_data else None
+
+        if logged_in_user_id is not None:
+            # Panggil fungsi DAO untuk mendapatkan jumlah notifikasi belum dibaca
+            count = get_unread_notifications_count(logged_in_user_id)
+            self.unread_notifications_count = count # Simpan jumlahnya
+
+            # Perbarui teks tombol notifikasi
+            if count > 0:
+                self.button_notifications.config(text=f"Notifikasi ({count})", font=('Arial', 10, 'bold')) # Teks tebal jika ada notifikasi
+            else:
+                self.button_notifications.config(text="Notifikasi", font=('Arial', 10, 'normal')) # Teks normal jika tidak ada
+
+            print(f"Notification count updated: {count} unread.") # Debugging print
+
+            # Opsional: Jadwalkan pembaruan berikutnya (misal setiap 60 detik)
+            # self._after_id = self.after(60000, self.update_notification_count) # Update setiap 60000 ms (60 detik)
+            # Simpan ID agar bisa dibatalkan di hide()
+
+
+        else:
+            # Jika user_data tidak ada (seharusnya tidak terjadi di frame ini setelah login)
+            self.button_notifications.config(text="Notifikasi", font=('Arial', 10, 'normal'))
+            self.unread_notifications_count = 0
+            print("User data not available, cannot update notification count.") # Debugging print
+
+
     def show(self):
         """Menampilkan frame ini."""
         print("MainAppFrame: show called.") # Debugging print
+        super().show() # Panggil metode show dari BaseFrame (pack frame)
         # Panggil create_widgets di sini untuk memastikan UI dibuat/diperbarui saat frame ditampilkan
         self.create_widgets()
         # Panggil set_user_data *setelah* create_widgets selesai
         # self.main_app.user_data sudah diset di show_main_app_frame sebelum show() dipanggil
         self.set_user_data(self.main_app.user_data) # PANGGIL DI SINI
-        super().show() # Panggil metode show dari BaseFrame (pack frame)
+        # Perbarui jumlah notifikasi setiap kali frame ini ditampilkan
+        self.update_notification_count()
 
 
     def hide(self):
         """Menyembunyikan frame ini."""
         print("MainAppFrame: hide called.") # Debugging print
         super().hide()
-        # Tidak perlu mereset user_data di hide(), biarkan tetap ada sampai logout
+        # Batalkan penjadwalan update notifikasi jika ada
+        # if hasattr(self, '_after_id') and self._after_id is not None:
+        #     self.after_cancel(self._after_id)
+        #     self._after_id = None # Reset ID setelah dibatalkan
+

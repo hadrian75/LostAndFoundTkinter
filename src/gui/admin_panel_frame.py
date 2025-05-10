@@ -6,8 +6,10 @@ from tkinter import messagebox
 from .base_frame import BaseFrame # Mengimpor BaseFrame
 # Mengimpor fungsi DAO untuk mengambil klaim pending, update status klaim, dan mengambil gambar klaim
 from src.database.claim_dao import get_pending_claims, update_claim_status, get_claim_images_by_claim_id # Impor fungsi baru
-# Mengimpor fungsi DAO untuk update status item (diperlukan saat klaim disetujui)
-from src.database.item_dao import update_item_status # Pastikan fungsi ini ada/akan ada di item_dao.py
+# Mengimpor fungsi DAO untuk update status item (diperlukan saat klaim disetujui) DAN mengambil detail item
+from src.database.item_dao import update_item_status, get_item_by_id # Import fungsi update_item_status dan get_item_by_id
+# Mengimpor fungsi DAO untuk menambahkan notifikasi
+from src.database.notification_dao import add_notification # Import fungsi add_notification
 import datetime # Untuk memformat tanggal
 # Mengimpor modul untuk menampilkan gambar dari URL
 from PIL import ImageTk, Image # Perlu instal Pillow: pip install Pillow
@@ -112,8 +114,9 @@ class AdminPanelFrame(BaseFrame):
         action_frame = tk.Frame(self.content_frame)
         action_frame.pack(pady=10)
 
-        tk.Button(action_frame, text="Setujui Klaim Terpilih", command=self.handle_approve_claim, width=25).grid(row=0, column=0, padx=5)
-        tk.Button(action_frame, text="Tolak Klaim Terpilih", command=self.handle_reject_claim, width=25).grid(row=0, column=1, padx=5)
+        # Menggunakan lambda untuk meneruskan status ke handle_claim_action
+        tk.Button(action_frame, text="Setujui Klaim Terpilih", command=lambda: self.handle_claim_action('Approved'), width=25).grid(row=0, column=0, padx=5)
+        tk.Button(action_frame, text="Tolak Klaim Terpilih", command=lambda: self.handle_claim_action('Rejected'), width=25).grid(row=0, column=1, padx=5)
 
         # Link kembali ke halaman utama admin (atau halaman utama aplikasi)
         tk.Button(self.content_frame, text="Kembali ke Halaman Utama", command=lambda: self.main_app.show_main_app_frame(self.main_app.user_data), relief=tk.FLAT, fg="blue", cursor="hand2").pack(pady=(10, 10))
@@ -124,12 +127,22 @@ class AdminPanelFrame(BaseFrame):
         Mengambil data klaim pending dari DAO.
         """
         print("AdminPanelFrame: Attempting to load pending claims.") # Debugging print
+        # Pastikan pengguna yang login adalah admin sebelum memuat data
+        is_admin = self.main_app.user_data.get('IsAdmin', False) if self.main_app.user_data else False
+
+        if not is_admin:
+            print("User is not admin, cannot load pending claims.") # Debugging print
+            self.pending_claims = [] # Kosongkan list jika bukan admin
+            messagebox.showwarning("Akses Ditolak", "Anda tidak memiliki izin untuk mengakses halaman ini.")
+            self.main_app.show_main_app_frame(self.main_app.user_data) # Kembali ke halaman utama
+            return
+
         self.pending_claims = get_pending_claims()
         print(f"AdminPanelFrame: Loaded {len(self.pending_claims)} pending claims.") # Debugging print
         # DEBUG: Print loaded claims data
         # print("Loaded claims data structure:")
         # for i, claim in enumerate(self.pending_claims):
-        #     print(f"  Claim {i}: {claim}")
+        #    print(f"  Claim {i}: {claim}")
 
 
     def display_claims(self):
@@ -188,8 +201,8 @@ class AdminPanelFrame(BaseFrame):
         # Pastikan indeksnya benar sesuai kolom Treeview
         try:
             selected_claim_id = item_values[0]
-            selected_item_id = item_values[5] # ItemID ada di indeks 5
-            print(f"AdminPanelFrame: Extracted ClaimID: {selected_claim_id}, ItemID: {selected_item_id}") # DEBUG PRINT
+            # selected_item_id = item_values[5] # ItemID ada di indeks 5
+            print(f"AdminPanelFrame: Extracted ClaimID: {selected_claim_id}") # DEBUG PRINT
         except IndexError as e:
             print(f"AdminPanelFrame: Error extracting values from selected item: {e}") # DEBUG PRINT
             print("AdminPanelFrame: Check Treeview column definition and item values.")
@@ -198,8 +211,9 @@ class AdminPanelFrame(BaseFrame):
 
         # Cari detail klaim lengkap dari self.pending_claims berdasarkan ClaimID
         # self.pending_claims berisi semua detail yang diambil oleh get_pending_claims
+        # Gunakan perbandingan string karena nilai dari Treeview adalah string
         self.current_claim_details = next(
-            (claim for claim in self.pending_claims if str(claim.get('ClaimID')) == str(selected_claim_id)), # Bandingkan sebagai string/int jika perlu
+            (claim for claim in self.pending_claims if str(claim.get('ClaimID')) == str(selected_claim_id)),
             None # Default None jika tidak ditemukan (seharusnya tidak terjadi jika data dari Treeview)
         )
 
@@ -255,12 +269,16 @@ class AdminPanelFrame(BaseFrame):
         Menggunakan threading untuk mengunduh gambar.
         """
         print(f"AdminPanelFrame: Loading images for ClaimID: {claim_id}") # Debugging print
+        # Panggil fungsi DAO baru untuk mengambil semua URL gambar klaim
         # Pastikan claim_id adalah integer jika fungsi DAO membutuhkannya
         image_urls = get_claim_images_by_claim_id(int(claim_id)) # Pastikan passing integer
 
         if not image_urls:
             tk.Label(self.images_scrollable_frame, text="[Tidak Ada Bukti Gambar]").pack(side="left", padx=5)
             print("AdminPanelFrame: No claim images found for this claim.") # Debugging print
+            # Update scrollregion meskipun kosong
+            self.images_scrollable_frame.update_idletasks()
+            self.images_canvas.config(scrollregion=self.images_canvas.bbox("all"))
             return
 
         print(f"AdminPanelFrame: Found {len(image_urls)} claim images. Attempting to display...") # Debugging print
@@ -340,99 +358,105 @@ class AdminPanelFrame(BaseFrame):
              print(f"AdminPanelFrame: Error checking winfo_exists() in update_image_label: {e}")
 
 
-    def handle_approve_claim(self):
-        """Menangani aksi saat tombol 'Setujui Klaim Terpilih' diklik."""
-        selected_item = self.claims_tree.selection() # Ambil item yang dipilih di Treeview
+    def handle_claim_action(self, status):
+        """
+        Menangani aksi admin (Setujui/Tolak) pada klaim terpilih.
+        Menambahkan notifikasi setelah aksi berhasil.
 
-        if not selected_item:
-            messagebox.showwarning("Peringatan", "Pilih klaim yang ingin disetujui terlebih dahulu.")
+        Args:
+            status (str): Status baru klaim ('Approved' atau 'Rejected').
+        """
+        selected_items = self.claims_tree.selection() # Ambil item yang dipilih di Treeview
+        admin_user_id = self.main_app.user_data.get('UserID') # Ambil UserID admin yang sedang login
+
+        if not selected_items:
+            messagebox.showwarning("Peringatan", "Pilih klaim yang ingin diverifikasi terlebih dahulu.")
             return
 
-        # Ambil nilai dari item yang dipilih
-        item_values = self.claims_tree.item(selected_item[0], 'values')
+        # Ambil nilai dari item yang dipilih (asumsi hanya satu item dipilih)
+        item_values = self.claims_tree.item(selected_items[0], 'values')
         # Urutan nilai: (ClaimID, Item, Pengklaim, Tanggal Klaim, Detail Klaim, ItemID)
         selected_claim_id = item_values[0]
         selected_item_id = item_values[5] # ItemID ada di indeks 5
         selected_item_name = item_values[1] # Item Name ada di indeks 1
 
-        print(f"AdminPanelFrame: Attempting to approve ClaimID {selected_claim_id} for ItemID {selected_item_id}.") # Debugging print
+        print(f"AdminPanelFrame: Attempting to set ClaimID {selected_claim_id} status to '{status}'.") # Debugging print
 
-        # Konfirmasi admin
-        confirm = messagebox.askyesno("Konfirmasi Persetujuan", f"Anda yakin ingin MENYETUJui klaim (ID: {selected_claim_id}) untuk barang '{selected_item_name}'?")
+        # Konfirmasi aksi dari admin
+        action_verb = "MENYETUJui" if status == 'Approved' else "MENOLAK"
+        confirm = messagebox.askyesno("Konfirmasi Verifikasi", f"Anda yakin ingin {action_verb} klaim (ID: {selected_claim_id}) untuk barang '{selected_item_name}'?")
         if not confirm:
-            return
+            return # Admin membatalkan
 
-        # Panggil fungsi DAO untuk update status klaim menjadi 'Approved'
-        claim_update_success = update_claim_status(selected_claim_id, 'Approved')
+        # Panggil fungsi DAO untuk update status klaim di database
+        # update_claim_status sekarang menerima admin_user_id
+        claim_update_success = update_claim_status(selected_claim_id, status) # update_claim_status tidak butuh admin_user_id di implementasi DAO saat ini
 
         if claim_update_success:
-            # Jika status klaim berhasil diupdate, update juga status item menjadi 'Claimed'
-            item_update_success = update_item_status(selected_item_id, 'Claimed')
+            messagebox.showinfo("Sukses", f"Klaim (ID: {selected_claim_id}) berhasil di{status.lower()}.")
 
-            if item_update_success:
-                 messagebox.showinfo("Sukses", f"Klaim (ID: {selected_claim_id}) disetujui. Status barang diperbarui menjadi 'Claimed'.")
-                 # TODO: Kirim notifikasi ke pengklaim dan penemu
-                 # Anda perlu mendapatkan UserID pengklaim (dari self.current_claim_details atau query tambahan)
-                 # dan UserID penemu (dari item_dao.get_item_by_id atau JOIN di get_pending_claims)
-                 # self.main_app.send_notification(pengklaim_user_id, "Klaim Anda disetujui!")
-                 # self.main_app.send_notification(penemu_user_id, f"Barang '{selected_item_name}' yang Anda temukan telah diklaim.")
+            # --- Logika Notifikasi ---
+            # Cari data klaim lengkap dari self.pending_claims berdasarkan selected_claim_id
+            claim_data = None
+            for claim in self.pending_claims:
+                 if str(claim.get('ClaimID')) == str(selected_claim_id): # Bandingkan sebagai string
+                      claim_data = claim
+                      break
+
+            if claim_data:
+                 claimed_by_user_id = claim_data.get('ClaimedBy')
+                 claimed_item_id = claim_data.get('ItemID') # ItemID barang yang diklaim
+                 item_name_for_notif = claim_data.get('ItemName', 'Barang Tidak Diketahui') # Nama barang untuk notifikasi
+
+                 if claimed_by_user_id:
+                      # Notifikasi untuk Pengklaim
+                      notification_message_claimer = f"Status klaim Anda untuk barang '{item_name_for_notif}' telah di{status.lower()} oleh admin."
+                      print(f"AdminPanelFrame: Sending notification to claimant (UserID: {claimed_by_user_id}): {notification_message_claimer}") # Debugging print
+                      add_notification(claimed_by_user_id, notification_message_claimer)
+
+                 # Jika klaim disetujui, kirim notifikasi juga ke Penemu Barang (jika ada dan berbeda dari pengklaim)
+                 if status == 'Approved':
+                      # Ambil data item untuk mendapatkan FoundBy (UserID penemu)
+                      item_detail = get_item_by_id(claimed_item_id)
+                      found_by_user_id = item_detail.get('FoundBy') if item_detail else None
+                      item_name_for_finder_notif = item_detail.get('ItemName', 'Barang Tidak Diketahui') if item_detail else 'Barang Tidak Diketahui'
+
+
+                      if found_by_user_id and found_by_user_id != claimed_by_user_id:
+                           # Update status item menjadi 'Claimed' di sini
+                           item_update_success = update_item_status(selected_item_id, 'Claimed')
+                           if item_update_success:
+                                print(f"AdminPanelFrame: Item status updated to 'Claimed' for ItemID {selected_item_id}.") # Debugging print
+                                notification_message_finder = f"Barang '{item_name_for_finder_notif}' yang Anda temukan telah berhasil diklaim oleh pengguna lain."
+                                print(f"AdminPanelFrame: Sending notification to finder (UserID: {found_by_user_id}): {notification_message_finder}") # Debugging print
+                                add_notification(found_by_user_id, notification_message_finder)
+                           else:
+                                print(f"AdminPanelFrame: FAILED to update item status to 'Claimed' for ItemID {selected_item_id}.") # Debugging print
+                                # Opsional: Kirim notifikasi ke admin tentang kegagalan update status item
+                                # add_notification(admin_user_id, f"Gagal update status item {selected_item_id} menjadi 'Claimed' setelah klaim disetujui.")
+
 
             else:
-                 # Status klaim berhasil diupdate, tapi status item gagal
-                 messagebox.showwarning("Peringatan", f"Klaim (ID: {selected_claim_id}) disetujui, tetapi GAGAL memperbarui status barang (ID: {selected_item_id}). Mohon periksa log atau database.")
-                 # TODO: Kirim notifikasi ke pengklaim bahwa klaim disetujui, tapi tambahkan catatan tentang masalah item
-                 # self.main_app.send_notification(pengklaim_user_id, "Klaim Anda disetujui, tetapi ada masalah dengan status barang.")
+                 print(f"AdminPanelFrame: Could not find claim data in self.pending_claims for ClaimID {selected_claim_id}, skipping notification.") # Debugging print
 
 
-            # Refresh daftar klaim pending setelah aksi
+            # Refresh daftar klaim pending setelah aksi berhasil
             self.load_pending_claims()
             self.display_claims()
             self.clear_detail_area() # Bersihkan detail area setelah klaim diproses
 
         else:
             # Gagal update status klaim
-            messagebox.showwarning("Gagal", f"Gagal menyetujui klaim (ID: {selected_claim_id}). Mohon coba lagi atau periksa log database.")
+            # update_claim_status sudah menampilkan error database di konsol
+            messagebox.showwarning("Gagal", f"Gagal mengupdate status klaim (ID: {selected_claim_id}). Mohon coba lagi atau periksa log database.")
 
 
-    def handle_reject_claim(self):
-        """Menangani aksi saat tombol 'Tolak Klaim Terpilih' diklik."""
-        selected_item = self.claims_tree.selection() # Ambil item yang dipilih di Treeview
+    # handle_approve_claim dan handle_reject_claim digabung menjadi handle_claim_action
+    # def handle_approve_claim(self):
+    #     pass # Dihapus
 
-        if not selected_item:
-            messagebox.showwarning("Peringatan", "Pilih klaim yang ingin ditolak terlebih dahulu.")
-            return
-
-        # Ambil nilai dari item yang dipilih
-        item_values = self.claims_tree.item(selected_item[0], 'values')
-        # Urutan nilai: (ClaimID, Item, Pengklaim, Tanggal Klaim, Detail Klaim, ItemID)
-        selected_claim_id = item_values[0]
-        selected_item_name = item_values[1] # Ambil nama item untuk pesan konfirmasi
-
-        print(f"AdminPanelFrame: Attempting to reject ClaimID {selected_claim_id} for item '{selected_item_name}'.") # Debugging print
-
-
-        # Konfirmasi admin
-        confirm = messagebox.askyesno("Konfirmasi Penolakan", f"Anda yakin ingin MENOLAK klaim (ID: {selected_claim_id}) untuk barang '{selected_item_name}'?")
-        if not confirm:
-            return
-
-        # Panggil fungsi DAO untuk update status klaim menjadi 'Rejected'
-        claim_update_success = update_claim_status(selected_claim_id, 'Rejected')
-
-        if claim_update_success:
-            messagebox.showinfo("Sukses", f"Klaim (ID: {selected_claim_id}) berhasil ditolak.")
-            # TODO: Kirim notifikasi ke pengklaim bahwa klaim ditolak
-            # Anda perlu mendapatkan UserID pengklaim (dari self.current_claim_details atau query tambahan)
-            # self.main_app.send_notification(pengklaim_user_id, "Klaim Anda ditolak.")
-
-            # Refresh daftar klaim pending setelah aksi
-            self.load_pending_claims()
-            self.display_claims()
-            self.clear_detail_area() # Bersihkan detail area setelah klaim diproses
-
-        else:
-            # Gagal update status klaim
-            messagebox.showwarning("Gagal", f"Gagal menolak klaim (ID: {selected_claim_id}). Mohon coba lagi atau periksa log database.")
+    # def handle_reject_claim(self):
+    #     pass # Dihapus
 
 
     def show(self):
@@ -440,20 +464,28 @@ class AdminPanelFrame(BaseFrame):
         Menampilkan frame ini dan me-refresh daftar klaim pending.
         """
         print("AdminPanelFrame: show called.") # Debugging print
+        # Pastikan pengguna adalah admin sebelum menampilkan frame
+        is_admin = self.main_app.user_data.get('IsAdmin', False) if self.main_app.user_data else False
+        if not is_admin:
+             messagebox.showwarning("Akses Ditolak", "Anda tidak memiliki izin untuk mengakses halaman ini.")
+             self.main_app.show_main_app_frame(self.main_app.user_data) # Kembali ke halaman utama
+             return
+
+        super().show() # Panggil metode show dari BaseFrame (pack frame)
         # Muat data klaim pending dan tampilkan setiap kali frame ini ditunjukkan
         self.load_pending_claims()
         self.display_claims()
         self.clear_detail_area() # Bersihkan detail area saat frame ditampilkan
-        super().show() # Panggil metode show dari BaseFrame (pack frame)
 
 
     def hide(self):
         """
-        Menyembunyikan frame ini.
+         Menyembunyikan frame ini.
         """
         print("AdminPanelFrame: hide called.") # Debugging print
         super().hide()
-        # Opsional: Bersihkan data klaim pending saat frame disembunyikan
+        # Bersihkan data dan tampilan saat frame disembunyikan
         self.pending_claims = []
-        self.display_claims() 
-        self.clear_detail_area() 
+        self.display_claims() # Membersihkan Treeview
+        self.clear_detail_area() # Membersihkan area detail
+        self.current_claim_details = None # Reset detail klaim yang ditampilkan

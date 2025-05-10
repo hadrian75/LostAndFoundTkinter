@@ -3,7 +3,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import filedialog # Diperlukan untuk memilih file gambar bukti
-from tkinter import ttk 
+from tkinter import ttk
 from .base_frame import BaseFrame # Mengimpor BaseFrame
 # Mengimpor fungsi DAO untuk mengambil detail item dan menambahkan klaim
 from src.database.item_dao import get_item_by_id, get_item_images_by_item_id # Impor fungsi untuk ambil detail dan gambar item
@@ -35,7 +35,7 @@ class ClaimItemFrame(BaseFrame):
         super().__init__(parent, main_app)
         self.item_id = None # Untuk menyimpan ItemID barang yang diklaim
         self.item_data = None # Untuk menyimpan detail data item
-        self.image_paths = [] # List untuk menyimpan jalur file gambar bukti klaim yang dipilih
+        self.proof_image_paths = [] # List untuk menyimpan jalur file gambar bukti klaim yang dipilih
         self.item_image_refs = [] # List untuk menyimpan referensi gambar item yang ditampilkan
 
         # Struktur dasar frame ini akan dibuat di create_widgets()
@@ -117,7 +117,8 @@ class ClaimItemFrame(BaseFrame):
             item_images_scrollable_frame.bind("<Configure>", lambda e, c=item_images_canvas: c.configure(scrollregion=c.bbox("all")))
 
             # Muat dan tampilkan semua gambar item
-            self.load_and_display_item_images(self.item_id, item_images_scrollable_frame)
+            # TERUSKAN objek Canvas ke fungsi load_and_display_item_images
+            self.load_and_display_item_images(self.item_id, item_images_scrollable_frame, item_images_canvas)
 
 
             # --- Form Klaim ---
@@ -151,10 +152,11 @@ class ClaimItemFrame(BaseFrame):
         tk.Button(self, text="Kembali ke Daftar Barang", command=self.main_app.show_view_items_frame, relief=tk.FLAT, fg="blue", cursor="hand2").pack(pady=(10, 0))
 
 
-    def load_and_display_item_images(self, item_id, images_container_frame):
+    def load_and_display_item_images(self, item_id, images_container_frame, item_images_canvas):
         """
         Mengambil URL semua gambar untuk item tertentu dari DAO dan menampilkannya.
         Menggunakan threading untuk mengunduh gambar.
+        Menerima objek Canvas untuk memperbarui scrollregion.
         """
         print(f"ClaimItemFrame: Loading all images for ItemID: {item_id}") # Debugging print
         # Panggil fungsi DAO untuk mengambil semua URL gambar item
@@ -166,6 +168,9 @@ class ClaimItemFrame(BaseFrame):
         if not image_urls:
             tk.Label(images_container_frame, text="[Tidak Ada Gambar]").pack(side="left", padx=5)
             print(f"ClaimItemFrame: No images found for ItemID {item_id}.") # Debugging print
+            # Perbarui scrollregion meskipun tidak ada gambar agar scrollbar tidak muncul kosong
+            item_images_canvas.update_idletasks()
+            item_images_canvas.config(scrollregion=item_images_canvas.bbox("all"))
             return
 
         print(f"ClaimItemFrame: Found {len(image_urls)} images for ItemID {item_id}. Attempting to display...") # Debugging print
@@ -174,15 +179,16 @@ class ClaimItemFrame(BaseFrame):
             # Tampilkan label "Memuat..." sementara
             img_label = tk.Label(images_container_frame, text="Memuat...")
             img_label.pack(side="left", padx=5)
-            # Teruskan item_id juga ke fungsi download_and_display_image
-            thread = threading.Thread(target=self.download_and_display_image, args=(url, img_label))
+            # Teruskan objek Canvas ke thread target
+            thread = threading.Thread(target=self.download_and_display_image, args=(url, img_label, item_images_canvas)) # <-- Teruskan Canvas
             thread.daemon = True # Set thread as daemon
             thread.start()
 
-    def download_and_display_image(self, image_url, img_label):
+    def download_and_display_image(self, image_url, img_label, item_images_canvas):
         """
         Mengunduh gambar dari URL dan menampilkannya di label yang diberikan.
         Dijalankan di thread terpisah.
+        Menerima objek Canvas untuk diteruskan ke update_image_label.
         """
         try:
             # print(f"ClaimItemFrame: Downloading image from URL: {image_url}") # Debugging print
@@ -201,11 +207,13 @@ class ClaimItemFrame(BaseFrame):
             try:
                 if img_label.winfo_exists(): # Check if the widget still exists
                     # Update label di thread utama menggunakan after()
-                    self.after(0, lambda: self.update_image_label(img_label, photo_img))
+                    # TERUSKAN objek Canvas ke update_image_label
+                    self.after(0, lambda: self.update_image_label(img_label, photo_img, item_images_canvas)) # <-- Teruskan Canvas
                 else:
                     print("ClaimItemFrame: GUI label for image no longer exists, skipping update.")
             except Exception as e:
                  print(f"ClaimItemFrame: Error checking winfo_exists() for image label: {e}")
+
 
             # print(f"ClaimItemFrame: Image successfully downloaded from URL: {image_url}") # Debugging print
 
@@ -224,10 +232,11 @@ class ClaimItemFrame(BaseFrame):
             except Exception as e_check:
                  print(f"ClaimItemFrame: Error checking winfo_exists() in image generic error handler: {e_check}")
 
-    def update_image_label(self, img_label, photo_img):
+    def update_image_label(self, img_label, photo_img, item_images_canvas):
         """
         Memperbarui widget Label gambar dengan gambar yang dimuat.
         Dijalankan di thread utama menggunakan after().
+        Menerima objek Canvas untuk memperbarui scrollregion.
         """
         # --- Add check if img_label is still valid ---
         try:
@@ -235,18 +244,13 @@ class ClaimItemFrame(BaseFrame):
                 img_label.config(image=photo_img, text='') # Hapus teks "Memuat gambar..."
                 self.item_image_refs.append(photo_img) # Simpan referensi gambar item
                 # Update scrollregion canvas gambar horizontal setelah gambar ditambahkan
-                # Temukan canvas parent dari img_label
-                parent_canvas = img_label.winfo_parent() # Ini adalah images_scrollable_frame
-                # images_scrollable_frame adalah window di dalam item_images_canvas
-                # Coba naik 2 level parent
-                item_images_canvas = img_label.winfo_parent().winfo_parent()
-
-                # Pastikan item_images_canvas adalah Canvas sebelum mengkonfigurasi
-                if isinstance(item_images_canvas, tk.Canvas):
+                # Gunakan item_images_canvas yang diterima sebagai parameter
+                if isinstance(item_images_canvas, tk.Canvas): # Double check type
                     item_images_canvas.update_idletasks() # Penting: Update agar bbox() akurat
                     item_images_canvas.config(scrollregion=item_images_canvas.bbox("all"))
+                    # print("ClaimItemFrame: Canvas scrollregion updated.") # Debugging print
                 else:
-                    print("ClaimItemFrame: Could not find parent Canvas for image label.")
+                    print("ClaimItemFrame: Received invalid object instead of Canvas in update_image_label.") # Should not happen if passed correctly
 
             else:
                 print("ClaimItemFrame: GUI label for image no longer exists during update, skipping.")
@@ -268,6 +272,7 @@ class ClaimItemFrame(BaseFrame):
 
     def handle_submit_claim(self):
         """Menangani aksi saat tombol Ajukan Klaim diklik."""
+        print(f"ClaimItemFrame: handle_submit_claim called. self.item_id: {self.item_id}, self.item_data is None: {self.item_data is None}") # DEBUG PRINT
         claim_details = self.text_claim_details.get("1.0", tk.END).strip()
 
         if not claim_details:
@@ -276,6 +281,8 @@ class ClaimItemFrame(BaseFrame):
 
         if self.item_id is None:
             messagebox.showerror("Error", "Tidak ada barang yang dipilih untuk diklaim.")
+            # Kembali ke daftar item
+            self.main_app.show_view_items_frame()
             return
 
         # Pastikan pengguna sedang login untuk mendapatkan UserID pengklaim
@@ -306,7 +313,6 @@ class ClaimItemFrame(BaseFrame):
                      # Menggunakan username + item_id + timestamp + index untuk keunikan
                      uploaded_file_name = f"claims/{username}_{self.item_id}_{timestamp}_{i}{file_ext}"
 
-                     # Panggil fungsi upload_image dari imagekit_service
                      print(f"Uploading claim file {i+1}/{len(self.image_paths)}: {os.path.basename(path)} as '{uploaded_file_name}'...")
                      # Anda bisa menambahkan opsi folder di sini jika perlu, misal options={"folder": "/claims/"}
                      upload_response = upload_image(path, uploaded_file_name)
@@ -324,7 +330,6 @@ class ClaimItemFrame(BaseFrame):
                      # Lanjutkan ke gambar berikutnya
 
              if upload_errors:
-                 # Beri tahu pengguna jika ada gambar yang gagal diunggah
                  messagebox.showwarning("Unggah Gambar Bukti Gagal", "Beberapa gambar bukti klaim gagal diunggah. Klaim akan diajukan tanpa gambar tersebut.")
         # --- Akhir Implementasi Unggah Gambar Bukti Klaim ---
 
@@ -341,6 +346,7 @@ class ClaimItemFrame(BaseFrame):
             self.label_claim_image_count.config(text="0 file dipilih") # Update label jumlah file
             self.item_id = None # Reset item_id setelah klaim diajukan
             self.item_data = None # Reset item_data
+            self.item_image_refs = [] # Bersihkan referensi gambar item
             # Kembali ke halaman daftar barang
             self.main_app.show_view_items_frame()
         else:

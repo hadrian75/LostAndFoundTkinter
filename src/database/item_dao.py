@@ -39,7 +39,7 @@ def get_all_found_items():
             LEFT JOIN -- Gunakan LEFT JOIN karena FoundBy bisa NULL
                 Users U ON I.FoundBy = U.UserID
             WHERE
-                I.Status = 'Found' AND I.IsActive = TRUE
+                I.Status = 'Lost' AND I.IsActive = TRUE
             ORDER BY
                 I.CreatedAt DESC -- Urutkan berdasarkan waktu penemuan terbaru
         """
@@ -107,33 +107,29 @@ def get_item_by_id(item_id):
         close_db_connection(conn)
 
 def get_item_images_by_item_id(item_id):
-    """
-    Mengambil daftar URL gambar untuk item tertentu.
-    Mengembalikan list of strings (URL gambar) jika ditemukan, list kosong jika tidak atau error.
-    """
-    print(f"Attempting to fetch item images for ItemID: {item_id}") # Debugging print
+    print(f"Attempting to fetch item images for ItemID: {item_id}") 
     conn = create_db_connection()
     if conn is None:
-        return [] # Gagal koneksi
+        return []
 
-    cursor = conn.cursor() # Tidak perlu dictionary=True jika hanya mengambil satu kolom
+    cursor = conn.cursor()
     image_urls = []
 
     try:
-        # Query untuk mengambil semua ImageURL dari tabel ItemImages untuk ItemID tertentu
         sql = "SELECT ImageURL FROM ItemImages WHERE ItemID = %s"
         cursor.execute(sql, (item_id,))
-        results = cursor.fetchall() # Ambil semua baris hasil
+        results = cursor.fetchall()
 
-        # Ekstrak URL dari hasil query (hasilnya adalah list of tuples, misal: [('url1',), ('url2',)])
         image_urls = [row[0] for row in results]
-
-        print(f"Found {len(image_urls)} images for ItemID {item_id}.") # Debugging print
+        for url in image_urls:
+            print(f"DEBUG: Fetched image URL: {url}")  # Log URL
+            
+        print(f"Found {len(image_urls)} images for ItemID {item_id}.")
         return image_urls
 
     except mysql.connector.Error as err:
-        print(f"Database Error in get_item_images_by_item_id: {err}") # Log error
-        return [] # Kembalikan list kosong jika terjadi error
+        print(f"Database Error: {err}")
+        return []
     finally:
         cursor.close()
         close_db_connection(conn)
@@ -315,7 +311,7 @@ if __name__ == "__main__":
 
     # --- Test get_item_images_by_item_id ---
     # Ganti dengan ItemID yang ada di database Anda dan memiliki gambar di ItemImages
-    test_item_id_with_images = 1 # Ganti dengan ItemID yang valid
+    test_item_id_with_images = 6 # Ganti dengan ItemID yang valid
     print(f"\n--- Testing get_item_images_by_item_id for ItemID {test_item_id_with_images} ---")
     item_images = get_item_images_by_item_id(test_item_id_with_images)
 
