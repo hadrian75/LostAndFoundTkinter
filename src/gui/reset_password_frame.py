@@ -11,7 +11,7 @@ from src.database.auth_dao import reset_password_with_token
 class ResetPasswordFrame(BaseFrame):
     """
     Frame untuk halaman Reset Password.
-    Pengguna memasukkan token reset dan password baru mereka.
+    Pengguna memasukkan token reset dan password baru mereka secara manual.
     """
     def __init__(self, parent, main_app):
         """
@@ -21,13 +21,15 @@ class ResetPasswordFrame(BaseFrame):
             parent: Widget parent.
             main_app: Referensi ke instance kelas MainApp.
         """
+        print("ResetPasswordFrame: __init__ called.") # Debugging print
         super().__init__(parent, main_app)
         # Variabel untuk menyimpan data token jika frame ini dibuka via link email (opsional)
-        # self.token_data = None
+        # self.token_data = None # Tidak lagi digunakan dalam alur aman
         self.create_widgets() # Panggil metode untuk membuat widget
 
     def create_widgets(self):
         """Membuat widget untuk form reset password."""
+        print("ResetPasswordFrame: create_widgets called.") # Debugging print
         self.clear_widgets() # Bersihkan widget lama jika ada
 
         tk.Label(self, text="Reset Password", font=('Arial', 18, 'bold')).pack(pady=(20, 10))
@@ -41,9 +43,8 @@ class ResetPasswordFrame(BaseFrame):
         tk.Label(input_frame, text="Token Reset:").grid(row=0, column=0, sticky='w', pady=5, padx=5)
         self.entry_reset_token = tk.Entry(input_frame, width=40)
         self.entry_reset_token.grid(row=0, column=1, pady=5, padx=5)
-        # Jika frame dibuka dengan token dari email, Anda bisa set nilai entry_reset_token di sini
-        # if self.token_data:
-        #     self.entry_reset_token.insert(0, self.token_data['token'])
+        # Set fokus ke field token saat frame dibuka
+        self.entry_reset_token.focus_set()
 
 
         # Label dan Entry untuk Password Baru
@@ -62,29 +63,35 @@ class ResetPasswordFrame(BaseFrame):
         # Link kembali ke login
         tk.Button(self, text="Kembali ke Login", command=self.main_app.show_login_frame, relief=tk.FLAT, fg="blue", cursor="hand2").pack(pady=(10, 0))
 
-    # Metode opsional untuk menerima data token jika frame dibuka dari luar (misal dari link email)
-    def set_token(self, token):
-        """
-        Mengatur nilai entry field token reset.
-        Dipanggil oleh MainApp saat frame ini ditampilkan dengan token.
-        """
-        self.entry_reset_token.delete(0, tk.END) # Bersihkan field
-        self.entry_reset_token.insert(0, token) # Isi dengan token yang diterima
-        self.entry_new_password.focus_set() # Set fokus ke field password baru
+    # Metode set_token tidak lagi diperlukan untuk mengisi field secara otomatis
+    # Hapus metode ini sepenuhnya jika tidak ada kasus penggunaan lain.
+    # def set_token(self, token):
+    #     """
+    #     Mengatur nilai entry field token reset.
+    #     Dipanggil oleh MainApp saat frame ini ditampilkan dengan token.
+    #     """
+    #     print(f"ResetPasswordFrame: set_token called with token: {token}") # Debugging print
+    #     # self.entry_reset_token.delete(0, tk.END) # Bersihkan field
+    #     # self.entry_reset_token.insert(0, token) # Isi dengan token yang diterima
+    #     # self.entry_new_password.focus_set() # Set fokus ke field password baru
+    #     pass # Metode ini sekarang tidak melakukan apa-apa dalam alur aman
 
 
     def handle_reset_password(self):
         """Menangani aksi saat tombol Reset Password diklik."""
+        print("ResetPasswordFrame: handle_reset_password called.") # Debugging print
         reset_token = self.entry_reset_token.get().strip()
         new_password = self.entry_new_password.get() # Ambil password baru (plain text)
         confirm_password = self.entry_confirm_password.get()
 
         if not all([reset_token, new_password, confirm_password]):
             messagebox.showwarning("Input Error", "Semua field harus diisi.")
+            print("ResetPasswordFrame: Input fields are empty.") # Debugging print
             return
 
         if new_password != confirm_password:
             messagebox.showwarning("Input Error", "Password baru dan konfirmasi password tidak cocok.")
+            print("ResetPasswordFrame: Passwords do not match.") # Debugging print
             return
 
         # TODO: Tambahkan validasi kekuatan password jika diperlukan (panjang min, karakter, dll.)
@@ -95,10 +102,12 @@ class ResetPasswordFrame(BaseFrame):
         # Panggil fungsi DAO untuk memproses reset password sebenarnya
         # Fungsi ini akan memverifikasi token dan mengupdate password.
         # Kita meneruskan token dan password baru (plain text) ke DAO.
+        print(f"ResetPasswordFrame: Calling reset_password_with_token with token: {reset_token} and new password (masked).") # Debugging print
         reset_success = reset_password_with_token(reset_token, new_password)
 
         if reset_success:
             messagebox.showinfo("Reset Berhasil", "Password Anda telah berhasil direset. Silakan login dengan password baru Anda.")
+            print("ResetPasswordFrame: Password reset successful.") # Debugging print
             # Arahkan kembali ke halaman login setelah reset berhasil
             self.main_app.show_login_frame()
         else:
@@ -109,4 +118,27 @@ class ResetPasswordFrame(BaseFrame):
             # Untuk saat ini, pesan error sudah muncul via print dari DAO.
             # Tampilkan pesan umum di GUI jika reset_password_with_token mengembalikan False
             messagebox.showwarning("Reset Gagal", "Gagal mereset password. Token tidak valid, sudah kedaluwarsa, atau sudah digunakan.")
+            print("ResetPasswordFrame: Password reset failed.") # Debugging print
             # Tetap di halaman reset password agar user bisa coba lagi atau periksa token
+
+    def show(self):
+        """
+        Menampilkan frame ini.
+        """
+        print("ResetPasswordFrame: show called.") # Debugging print
+        super().show() # Panggil metode show dari BaseFrame (pack frame)
+        # Fokuskan kembali ke field token saat frame ditampilkan
+        self.entry_reset_token.focus_set()
+
+
+    def hide(self):
+        """
+        Menyembunyikan frame ini.
+        """
+        print("ResetPasswordFrame: hide called.") # Debugging print
+        super().hide()
+        # Opsional: Bersihkan field input saat frame disembunyikan
+        # self.entry_reset_token.delete(0, tk.END)
+        # self.entry_new_password.delete(0, tk.END)
+        # self.entry_confirm_password.delete(0, tk.END)
+

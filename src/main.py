@@ -61,7 +61,7 @@ class MainApp:
         self.otp_frame = OTPFrame(self.root, self)
         self.main_app_frame = MainAppFrame(self.root, self)
         self.forgot_password_frame = ForgotPasswordFrame(self.root, self)
-        self.reset_password_frame = ResetPasswordFrame(self.root, self)
+        self.reset_password_frame = ResetPasswordFrame(self.root, self) # Pastikan instance ini dibuat
         self.report_item_frame = ReportItemFrame(self.root, self)
         self.view_items_frame = ViewItemsFrame(self.root, self)
         self.claim_item_frame = ClaimItemFrame(self.root, self)
@@ -99,7 +99,7 @@ class MainApp:
             self.forgot_password_frame.hide()
         except AttributeError: pass
         try:
-            self.reset_password_frame.hide()
+            self.reset_password_frame.hide() # Pastikan reset_password_frame disembunyikan
         except AttributeError: pass
         try:
             self.report_item_frame.hide()
@@ -112,6 +112,9 @@ class MainApp:
         except AttributeError: pass
         try: # Tambahkan AdminPanelFrame ke daftar yang disembunyikan
             self.admin_panel_frame.hide()
+        except AttributeError: pass
+        try: # Tambahkan MyClaimsFrame ke daftar yang disembunyikan
+             self.my_claims_frame.hide()
         except AttributeError: pass
         # Sembunyikan frame lain di sini
 
@@ -179,6 +182,8 @@ class MainApp:
         self.show_frame(self.forgot_password_frame)
         self.forgot_password_frame.entry_username_email.focus_set() # Set fokus ke field input
 
+    # --- PERUBAHAN UNTUK ALUR Forgot -> Reset ---
+    # show_reset_password_frame sekarang menerima token
     def show_reset_password_frame(self, reset_token=None):
         """
         Menampilkan frame Reset Password.
@@ -188,17 +193,18 @@ class MainApp:
             reset_token (str, optional): Token reset password jika tersedia.
         """
         print(f"MainApp: show_reset_password_frame called with token: {reset_token}") # Debugging print
-        # Anda bisa meneruskan token ke frame reset password jika frame tersebut memiliki metode untuk menerimanya
+        # Meneruskan token ke frame reset password jika frame tersebut memiliki metode set_token
         if reset_token and hasattr(self.reset_password_frame, 'set_token'):
+             print(f"MainApp: Calling set_token({reset_token}) on ResetPasswordFrame.") # Debugging print
              self.reset_password_frame.set_token(reset_token) # Perlu implementasi di ResetPasswordFrame
-        self.show_frame(self.reset_password_frame)
-        # Set fokus ke field token atau password baru
-        if reset_token:
-             # Jika token diberikan, set fokus ke password baru (setelah set_token)
-             pass # set_token di ResetPasswordFrame sudah menangani fokus
         else:
-             # Jika token tidak diberikan (misal, navigasi manual), set fokus ke field token
-             self.reset_password_frame.entry_reset_token.focus_set()
+             print("MainApp: show_reset_password_frame called without token or ResetPasswordFrame has no set_token method.") # Debugging print
+
+
+        self.show_frame(self.reset_password_frame)
+        # Set fokus ke field token atau password baru di ResetPasswordFrame
+        # Fokus akan diatur di set_token() jika token ada, atau di create_widgets() jika tidak
+        # Jadi tidak perlu set fokus di sini
 
     def show_report_item_frame(self):
         """Menampilkan frame Laporkan Barang Ditemukan."""

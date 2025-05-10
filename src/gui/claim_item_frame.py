@@ -3,6 +3,7 @@
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import filedialog # Diperlukan untuk memilih file gambar bukti
+from tkinter import ttk 
 from .base_frame import BaseFrame # Mengimpor BaseFrame
 # Mengimpor fungsi DAO untuk mengambil detail item dan menambahkan klaim
 from src.database.item_dao import get_item_by_id, get_item_images_by_item_id # Impor fungsi untuk ambil detail dan gambar item
@@ -30,6 +31,7 @@ class ClaimItemFrame(BaseFrame):
             parent: Widget parent.
             main_app: Referensi ke instance kelas MainApp.
         """
+        print("ClaimItemFrame: __init__ called.") # Debugging print
         super().__init__(parent, main_app)
         self.item_id = None # Untuk menyimpan ItemID barang yang diklaim
         self.item_data = None # Untuk menyimpan detail data item
@@ -105,7 +107,7 @@ class ClaimItemFrame(BaseFrame):
             # Canvas untuk menampilkan gambar item
             item_images_canvas = tk.Canvas(images_scroll_container, height=150, bd=0, highlightthickness=0) # Tinggi tetap untuk gambar
             item_images_canvas.pack(side="left", fill="x", expand=True)
-            item_images_scrollbar = tk.Scrollbar(images_scroll_container, orient="horizontal", command=item_images_canvas.xview)
+            item_images_scrollbar = ttk.Scrollbar(images_scroll_container, orient="horizontal", command=item_images_canvas.xview)
             item_images_canvas.configure(xscrollcommand=item_images_scrollbar.set)
             item_images_scrollbar.pack(side="bottom", fill="x")
 
@@ -368,10 +370,10 @@ class ClaimItemFrame(BaseFrame):
         """
         Menyembunyikan frame ini.
         """
-        print("ClaimItemFrame: hide called.") # Debugging print
+        print("ClaimItemFrame: hide called.") # DEBUGGING PRINT: Confirm hide is called
         super().hide()
         # Opsional: Bersihkan data dan tampilan saat frame disembunyikan
-        # self.item_id = None
+        # self.item_id = None # Reset item_id saat disembunyikan
         # self.item_data = None
         # self.image_paths = []
         # self.item_image_refs = []
