@@ -79,15 +79,24 @@ class LoginFrame(BaseFrame):
             # Jika autentikasi berhasil (user_data tidak None)
             if user_data.get('IsActive'): # Pastikan akun pengguna aktif (email sudah diverifikasi)
                 messagebox.showinfo("Sukses", f"Login berhasil! Selamat datang, {username}!")
-                # TODO: Arahkan ke halaman utama aplikasi setelah login sukses
+                # Arahkan ke halaman utama aplikasi setelah login sukses
                 self.main_app.show_main_app_frame(user_data) # Panggil metode di MainApp untuk ganti frame
             else:
-                 # Akun ditemukan tapi IsActive FALSE (belum verifikasi email)
-                 messagebox.showwarning("Login Gagal", "Akun Anda belum aktif. Mohon verifikasi email Anda.")
-                 # Opsional: Arahkan pengguna ke halaman info verifikasi atau opsi kirim ulang OTP
-                 # self.main_app.show_info_verification_frame()
+                # Akun ditemukan tapi IsActive FALSE (belum verifikasi email)
+                messagebox.showwarning("Login Gagal", "Akun Anda belum aktif. Mohon verifikasi email Anda.")
+                # Arahkan pengguna ke halaman verifikasi OTP kembali
+                # Anda perlu memastikan main_app memiliki metode show_otp_verification_frame
+                # dan frame OTP dapat menerima user_id atau data lain untuk memuat ulang form verifikasi
+                user_id = user_data.get('UserID')
+                if user_id is not None:
+                     # Panggil metode di MainApp untuk ganti frame ke OTP
+                     # Pastikan MainApp.show_otp_verification_frame bisa menerima user_id
+                     self.main_app.show_otp_verification_frame(user_id=user_id, username=username) # Contoh passing data
+                else:
+                     # Fallback jika somehow UserID tidak ada di user_data
+                     messagebox.showerror("Error", "Tidak dapat mengarahkan ke halaman verifikasi. Silakan coba daftar ulang.")
+                     self.main_app.show_register_frame() # Arahkan ke registrasi jika UserID tidak ditemukan
         else:
             # Jika autentikasi gagal (user_data adalah None)
-            # Pesan error spesifik (misal: username/password salah) sudah ditangani oleh authenticate_user_db di auth_dao
             # Tampilkan pesan error umum di GUI
             messagebox.showwarning("Login Gagal", "Username atau password salah.")

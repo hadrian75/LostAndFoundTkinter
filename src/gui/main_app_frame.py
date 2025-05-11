@@ -36,6 +36,11 @@ class MainAppFrame(BaseFrame):
         # self.create_widgets() # <--- HAPUS BARIS INI
 
     def create_widgets(self):
+        button_options = {
+    'width': 25,  # Slightly reduced from 30 for better proportion
+    'height': 2,
+    'font': ('Arial', 10)  # Consistent font for all buttons
+}
         """Membuat widget untuk frame utama aplikasi."""
         # self.clear_widgets() # <--- HAPUS BARIS INI. Widget akan dihapus secara manual jika perlu.
 
@@ -59,23 +64,27 @@ class MainAppFrame(BaseFrame):
         button_frame.pack(pady=10)
 
         # Tombol Laporkan Barang Ditemukan
-        tk.Button(button_frame, text="Laporkan Barang Ditemukan", command=self.main_app.show_report_item_frame, width=30, height=2).grid(row=0, column=0, padx=10, pady=10)
+        tk.Button(button_frame, text="Laporkan Barang Ditemukan", command=self.main_app.show_report_item_frame, **button_options).grid(row=0, column=0, padx=10, pady=10)
 
         # Tombol Lihat Barang Ditemukan
-        tk.Button(button_frame, text="Lihat Barang Ditemukan", command=self.main_app.show_view_items_frame, width=30, height=2).grid(row=0, column=1, padx=10, pady=10)
+        tk.Button(button_frame, text="Lihat Barang Ditemukan", command=self.main_app.show_view_items_frame, **button_options).grid(row=0, column=1, padx=10, pady=10)
 
         # Tombol Lihat Klaim Saya
-        tk.Button(button_frame, text="Lihat Klaim Saya", command=self.main_app.show_my_claims_frame, width=30, height=2).grid(row=1, column=0, padx=10, pady=10)
+        tk.Button(button_frame, text="Lihat Klaim Saya", command=self.main_app.show_my_claims_frame, **button_options).grid(row=2, column=0, padx=10, pady=10)
 
         # Tombol Notifikasi
         # Teks tombol akan diupdate nanti dengan jumlah notifikasi belum dibaca
-        self.button_notifications = tk.Button(button_frame, text="Notifikasi", command=self.main_app.show_notifications_frame, width=30, height=2)
+        self.button_notifications = tk.Button(button_frame, text="Notifikasi", command=self.main_app.show_notifications_frame, **button_options)
         self.button_notifications.grid(row=1, column=1, padx=10, pady=10)
-
+        tk.Button(button_frame,
+                text="Profil Saya",
+                command=self.main_app.show_user_profile_frame,
+                **button_options).grid(row=1, column=0, padx=10, pady=10)
 
         # Tombol Panel Admin (Awalnya Dibuat, Visibilitas Diatur di set_user_data)
         # Gunakan grid() untuk menempatkannya, tapi simpan referensi agar bisa diatur visibilitasnya
-        self.button_admin_panel = tk.Button(button_frame, text="Panel Admin", command=self.main_app.show_admin_panel_frame, width=30, height=2, bg="lightblue") # Warna berbeda untuk admin
+        self.button_admin_panel = tk.Button(button_frame, text="Panel Admin", command=self.main_app.show_admin_panel_frame, **button_options, bg="lightblue") # Warna berbeda untuk admin
+        self.button_admin_panel_user = tk.Button(button_frame, text="User Management", command=self.main_app.show_admin_panel_user, **button_options, bg="lightblue") # Warna berbeda untuk admin
         # Jangan panggil .grid() di sini secara langsung, panggil di set_user_data
         # self.button_admin_panel.grid(row=1, column=1, padx=10, pady=10)
 
@@ -123,9 +132,11 @@ class MainAppFrame(BaseFrame):
                  if is_admin:
                       # Tampilkan tombol admin panel di grid
                       self.button_admin_panel.grid(row=2, column=0, padx=10, pady=10) # Pindahkan ke row 2, col 0
+                      self.button_admin_panel_user.grid(row=2, column=1, padx=10, pady=10) # Pindahkan ke row 2, col 1
                  else:
                       # Sembunyikan tombol admin panel
                       self.button_admin_panel.grid_forget()
+                      self.button_admin_panel_user.grid_forget()
 
 
         else:
@@ -141,6 +152,7 @@ class MainAppFrame(BaseFrame):
             # Pastikan tombol admin juga disembunyikan saat logout
             if hasattr(self, 'button_admin_panel'):
                  self.button_admin_panel.grid_forget()
+                 self.button_admin_panel_user.grid_forget()
 
 
     def handle_logout(self):

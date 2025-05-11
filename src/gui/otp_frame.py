@@ -4,8 +4,8 @@ import tkinter as tk
 from tkinter import messagebox
 # Mengimpor BaseFrame dari paket gui
 from .base_frame import BaseFrame
-# Mengimpor fungsi verifikasi token dari DAO
-from src.database.auth_dao import verify_email_token
+# Mengimpor fungsi verifikasi token dan fungsi hapus user dari DAO
+from src.database.auth_dao import verify_email_token, delete_user_and_campus_user_by_id # Import fungsi delete
 
 class OTPFrame(BaseFrame):
     """
@@ -23,6 +23,8 @@ class OTPFrame(BaseFrame):
         super().__init__(parent, main_app)
         # Variabel untuk menyimpan UserID pengguna yang sedang diverifikasi
         self.user_id_to_verify = None
+        # Variabel untuk menyimpan username (opsional, bisa berguna untuk pesan)
+        self.username_to_verify = None
         self.create_widgets() # Panggil metode untuk membuat widget
 
     def create_widgets(self):
@@ -48,18 +50,29 @@ class OTPFrame(BaseFrame):
         # tk.Button(self, text="Kirim Ulang OTP", command=self.handle_resend_otp, relief=tk.FLAT, fg="blue", cursor="hand2").pack()
 
         # Link kembali ke login (jika pengguna ingin membatalkan atau sudah verifikasi sebelumnya)
+        # Ubah command untuk memanggil handler baru
         tk.Label(self, text="Sudah verifikasi atau ingin batal?").pack(pady=(10, 0))
-        tk.Button(self, text="Kembali ke Login", command=self.main_app.show_login_frame, relief=tk.FLAT, fg="blue", cursor="hand2").pack()
+        tk.Button(
+            self,
+            text="Kembali ke Login",
+            command=self.handle_cancel_verification, # <-- Panggil handler baru di sini
+            relief=tk.FLAT,
+            fg="blue",
+            cursor="hand2"
+        ).pack()
 
-    def set_user_to_verify(self, user_id):
+    def set_user_to_verify(self, user_id, username=None):
         """
-        Metode yang dipanggil oleh MainApp untuk mengatur UserID pengguna
-        yang perlu diverifikasi di frame ini.
+        Metode yang dipanggil oleh MainApp untuk mengatur UserID (dan opsional username)
+        pengguna yang perlu diverifikasi di frame ini.
         """
         self.user_id_to_verify = user_id
+        self.username_to_verify = username
         # Opsional: Tampilkan pesan ke user tentang email mana OTP dikirim
-        # Misalnya: tk.Label(self, text=f"Kode dikirim ke: {email_pengguna}").pack()
         # Untuk ini, Anda perlu meneruskan email pengguna juga dari RegisterFrame ke MainApp, lalu ke sini.
+        # Misalnya, tambahkan label di create_widgets dan update teksnya di sini.
+        # if username:
+        #     print(f"Verifying user: {username} (ID: {user_id})") # Debugging print
 
 
     def handle_verification(self):
@@ -88,13 +101,63 @@ class OTPFrame(BaseFrame):
             # Jika verifikasi berhasil (akun IsActive diubah menjadi TRUE di DB)
             messagebox.showinfo("Sukses", "Verifikasi email berhasil! Akun Anda sekarang aktif. Silakan login.")
             self.user_id_to_verify = None # Reset UserID setelah sukses verifikasi
+            self.username_to_verify = None
             self.main_app.show_login_frame() # Arahkan pengguna ke halaman login
         else:
             # Jika verifikasi gagal (token salah, kedaluwarsa, sudah digunakan, dll.)
-            # Pesan error spesifik (misal: token salah, kedaluwarsa)
-            # sudah ditangani di fungsi verify_email_token_db di auth_dao dan ditampilkan via print.
-            # Anda bisa menambahkan messagebox di sini jika ingin pesan error muncul di GUI
-            pass # Pesan error sudah ditangani oleh verify_email_token_db (via print)
-            # Contoh menampilkan pesan error di GUI jika verify_email_token mengembalikan False
-            # messagebox.showwarning("Verifikasi Gagal", "Kode OTP tidak valid, sudah kedaluwarsa, atau sudah digunakan.")
+            messagebox.showwarning("Verifikasi Gagal", "Kode OTP tidak valid, sudah kedaluwarsa, atau sudah digunakan.")
             # Tetap di halaman OTP agar user bisa coba lagi atau minta kirim ulang
+            # entry_otp.delete(0, tk.END) # Opsional: Bersihkan field OTP setelah gagal
+
+    def handle_cancel_verification(self):
+        """
+        Menangani aksi saat tombol 'Kembali ke Login' diklik.
+        Menghapus akun pengguna yang belum aktif dan mengarahkan ke halaman login.
+        """
+        print(f"Attempting to cancel verification for UserID: {self.user_id_to_verify}") # Debugging print
+        if self.user_id_to_verify is not None:
+            # Konfirmasi ke pengguna sebelum menghapus akun
+            confirm = messagebox.askyesno(
+                "Konfirmasi Pembatalan",
+                "Anda belum menyelesaikan verifikasi email. Jika Anda kembali ke halaman login sekarang, akun Anda akan dihapus. Lanjutkan?"
+            )
+            if confirm:
+                # Panggil fungsi DAO untuk menghapus pengguna dan campus user
+                success = delete_user_and_campus_user_by_id(self.user_id_to_verify)
+
+                if success:
+                    messagebox.showinfo("Pembatalan Berhasil", "Akun Anda telah dihapus.")
+                else:
+                    # Jika penghapusan gagal di DB, beri tahu pengguna tapi tetap lanjutkan ke login
+                    # agar tidak terjebak di halaman ini.
+                    messagebox.showwarning("Info", "Tidak dapat menghapus akun, namun Anda dapat mendaftar ulang.") # Opsional
+
+                self.user_id_to_verify = None # Reset UserID setelah mencoba hapus
+                self.username_to_verify = None
+                self.main_app.show_login_frame() # Arahkan kembali ke login
+            else:
+                 # Jika pengguna membatalkan konfirmasi, tetap di halaman OTP
+                 pass # Do nothing, stay on current frame
+        else:
+            # Jika user_id_to_verify tidak diset (misal, pengguna langsung ke halaman ini tanpa registrasi/login tidak aktif)
+            # Langsung arahkan ke login tanpa mencoba menghapus
+            print("No user_id_to_verify set, redirecting directly to login.") # Debugging print
+            self.main_app.show_login_frame()
+
+
+    # Tambahkan atau pastikan metode show() ada jika BaseFrame tidak menyediakannya
+    # def show(self):
+    #     super().show()
+    #     # Logika tambahan saat frame ditampilkan, misal:
+    #     # self.create_widgets() # Jika widget perlu dibuat ulang setiap kali show
+    #     # Jika set_user_to_verify dipanggil sebelum show, tidak perlu argumen di sini
+    #     # Jika set_user_to_verify dipanggil setelah show, MainApp perlu memanggilnya secara eksplisit.
+    #     pass
+
+    # Tambahkan atau pastikan metode hide() ada jika BaseFrame tidak menyediakannya
+    # def hide(self):
+    #     super().hide()
+    #     # Logika tambahan saat frame disembunyikan
+    #     # Misalnya, membersihkan field input:
+    #     # self.entry_otp.delete(0, tk.END)
+    #     pass

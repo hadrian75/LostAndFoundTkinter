@@ -23,6 +23,9 @@ from src.gui.claim_item_frame import ClaimItemFrame
 from src.gui.my_claims_frame import MyClaimsFrame
 from src.gui.admin_panel_frame import AdminPanelFrame
 from src.gui.notifications_frame import NotificationsFrame # Impor NotificationsFrame yang baru
+from src.gui.user_profile_frame import UserProfileFrame
+from src.gui.admin_panel_user_frame import AdminPanelUserFrame
+
 
 
 # Mengakses konfigurasi lain dari .env jika diperlukan
@@ -68,7 +71,11 @@ class MainApp:
         self.claim_item_frame = ClaimItemFrame(self.root, self)
         self.my_claims_frame = MyClaimsFrame(self.root, self)
         self.admin_panel_frame = AdminPanelFrame(self.root, self)
-        self.notifications_frame = NotificationsFrame(self.root, self) # Buat instance NotificationsFrame yang baru
+        self.notifications_frame = NotificationsFrame(self.root, self) 
+        self.user_profile_frame = UserProfileFrame(self.root, self) 
+        self.admin_panel_user_frame = AdminPanelUserFrame(self.root, self)
+
+
         # Buat instance frame lain di sini
 
 
@@ -121,12 +128,24 @@ class MainApp:
         try:
             self.notifications_frame.hide() # Pastikan notifications_frame disembunyikan
         except AttributeError: pass
+        try:
+            self.user_profile_frame.hide()
+        except AttributeError: pass
+        try:
+            self.admin_panel_user_frame.hide()
+        except AttributeError: pass
         # Sembunyikan frame lain di sini
 
 
         # Tampilkan frame yang diminta
         frame_to_show.show()
-
+    def show_user_profile_frame(self):
+        """Show the user profile editing frame"""
+        if self.user_data:
+            self.user_profile_frame.set_user_id(self.user_data['UserID'])
+            self.show_frame(self.user_profile_frame)
+        else:
+            messagebox.showerror("Error", "No user data available")
     def show_login_frame(self):
         """Menampilkan frame Login."""
         # Reset user_data saat kembali ke login
@@ -141,17 +160,18 @@ class MainApp:
         # Set fokus ke entry field pertama di frame register
         self.register_frame.entry_full_name.focus_set()
 
-    def show_otp_verification_frame(self, user_id): # Menerima UserID, BUKAN tuple
+    def show_otp_verification_frame(self, user_id, username=None): # Tambahkan parameter username
         """
-        Menampilkan frame Verifikasi OTP dan mengatur UserID pengguna
-        yang baru mendaftar untuk diverifikasi.
+        Menampilkan frame Verifikasi OTP dan mengatur UserID (dan opsional username)
+        pengguna yang baru mendaftar atau login dengan akun tidak aktif untuk diverifikasi.
 
         Args:
-            user_id (int): UserID dari pengguna yang baru mendaftar.
+            user_id (int): UserID dari pengguna.
+            username (str, optional): Username pengguna. Default None.
         """
-        print(f"MainApp: show_otp_verification_frame called for UserID: {user_id}") # Debugging print
-        # Mengatur UserID di frame OTP agar frame tersebut tahu pengguna mana yang perlu diverifikasi
-        self.otp_frame.set_user_to_verify(user_id)
+        print(f"MainApp: show_otp_verification_frame called for UserID: {user_id}, Username: {username}") # Debugging print
+        # Mengatur UserID (dan username) di frame OTP
+        self.otp_frame.set_user_to_verify(user_id, username) # Teruskan username juga
         self.show_frame(self.otp_frame)
         # Set fokus ke entry field OTP
         self.otp_frame.entry_otp.focus_set()
@@ -171,12 +191,7 @@ class MainApp:
         # --- Simpan user_data di instance MainApp ---
         self.user_data = user_data
 
-        # TODO: Ambil data CampusUser (FullName, NIM_NIP, Email, RoleName) berdasarkan UserID
-        # Anda perlu membuat fungsi di user_dao.py untuk ini
-        # from src.database.user_dao import get_campus_user_details_by_user_id
-        # campus_user_details = get_campus_user_details_by_user_id(user_data['UserID'])
-        # if campus_user_details:
-        #    self.user_data.update(campus_user_details) # Tambahkan detail campus user ke user_data yang disimpan
+
 
         # Menampilkan MainAppFrame
         self.show_frame(self.main_app_frame)
@@ -254,21 +269,24 @@ class MainApp:
         # load_pending_claims dan display_claims dipanggil di metode show() di AdminPanelFrame
         self.show_frame(self.admin_panel_frame)
 
-    # --- Metode Baru untuk Menampilkan Frame Notifikasi ---
+    # --- metode buat show frame nofiikasi ---
     def show_notifications_frame(self):
         """
         Menampilkan frame Notifikasi Pengguna.
         """
         print("MainApp: show_notifications_frame called.") # Debugging print
-        # load_notifications_data dan display_notifications dipanggil di metode show() di NotificationsFrame
         self.show_frame(self.notifications_frame)
+    def show_admin_panel_user(self):
+        """Show admin user management panel"""
+        if not self.user_data or not self.user_data.get('IsAdmin'):
+            messagebox.showwarning("Access Denied", "Only administrators can access this feature")
+            return
+        
+        self.show_frame(self.admin_panel_user_frame)
 
-
-# --- Jalankan Aplikasi ---
 if __name__ == "__main__":
-    # Membuat jendela root Tkinter
     root = tk.Tk()
-    # Membuat instance kelas MainApp, memulai aplikasi
+    root.attributes("-fullscreen", True)
+    root.geometry("1600x2400")
     app = MainApp(root)
-    # Memulai event loop Tkinter
     root.mainloop()

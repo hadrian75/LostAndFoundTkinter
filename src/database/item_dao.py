@@ -23,9 +23,7 @@ def get_all_found_items():
     items_list = []
 
     try:
-        # Query untuk mengambil item dengan status 'Found' dan IsActive=TRUE
-        # Join dengan Users untuk mendapatkan username penemu
-        # Tidak perlu join ke ItemImages di sini, kita akan ambil gambar secara terpisah per item
+       
         sql = """
             SELECT
                 I.ItemID,
@@ -33,6 +31,7 @@ def get_all_found_items():
                 I.Description,
                 I.Location, -- Ambil kolom Location (pastikan sudah ada di skema)
                 I.CreatedAt,
+                I.FoundBy,
                 U.Username AS FoundByUsername -- Ambil username penemu jika ada
             FROM
                 Items I
@@ -71,7 +70,6 @@ def get_item_by_id(item_id):
 
     try:
         # Query untuk mengambil detail item
-        # Tidak perlu join ke ItemImages di sini, kita akan ambil gambar secara terpisah
         sql = """
             SELECT
                 I.ItemID,
@@ -311,7 +309,7 @@ if __name__ == "__main__":
 
     # --- Test get_item_images_by_item_id ---
     # Ganti dengan ItemID yang ada di database Anda dan memiliki gambar di ItemImages
-    test_item_id_with_images = 6 # Ganti dengan ItemID yang valid
+    test_item_id_with_images = 10 # Ganti dengan ItemID yang valid
     print(f"\n--- Testing get_item_images_by_item_id for ItemID {test_item_id_with_images} ---")
     item_images = get_item_images_by_item_id(test_item_id_with_images)
 
